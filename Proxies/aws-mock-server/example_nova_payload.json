@@ -1,0 +1,12 @@
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": [{"text": "You are acting as Amazon Bedrock Nova. Tell me a joke."}]
+    }
+  ],
+  "inferenceConfig": {
+    "max_new_tokens": 100,
+    "temperature": 0.7
+  }
+}
