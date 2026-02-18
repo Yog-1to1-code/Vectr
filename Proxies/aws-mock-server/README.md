@@ -106,3 +106,39 @@ You can configure the proxy using environment variables:
 -   `OLLAMA_URL`: URL to Ollama Generate API (default: `http://localhost:11434/api/generate`)
 -   `OLLAMA_CHAT_URL`: URL to Ollama Chat API (default: `http://localhost:11434/api/chat`)
 -   `OLLAMA_MODEL`: The local Ollama model to use (default: `llama3`).
+
+## AWS RDS Proxy
+
+The proxy now also supports mocking AWS RDS (Relational Database Service) operations.
+If Docker is installed and running, it will spin up real PostgreSQL/MySQL containers.
+If Docker is unavailable, it runs in "Mock Mode", returning metadata for created instances and pointing to `localhost:5432` (configurable via `MOCK_RDS_PORT`).
+
+### Supported Actions
+- `CreateDBInstance`
+- `DescribeDBInstances`
+- `DeleteDBInstance`
+
+### Example Usage (RDS)
+
+To create a database instance:
+```bash
+aws rds create-db-instance \
+    --db-instance-identifier my-local-db \
+    --db-instance-class db.t3.micro \
+    --engine postgres \
+    --master-username myuser \
+    --master-user-password mypassword \
+    --endpoint-url http://localhost:8000
+```
+
+To list instances:
+```bash
+aws rds describe-db-instances --endpoint-url http://localhost:8000
+```
+
+To delete an instance:
+```bash
+aws rds delete-db-instance \
+    --db-instance-identifier my-local-db \
+    --endpoint-url http://localhost:8000
+```

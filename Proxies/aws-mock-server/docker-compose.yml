@@ -1,0 +1,24 @@
+version: '3.8'
+
+services:
+  aws-mock-proxy:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aws-mock-proxy
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount docker socket to allow spawning sibling containers for RDS
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Optional: Persist mock data if needed (for SQLite fallback)
+      - ./data:/root/Documents/VectrRDS
+    environment:
+      # Use host.docker.internal to access Ollama on the host machine
+      - OLLAMA_GENERATE_URL=http://host.docker.internal:11434/api/generate
+      - OLLAMA_CHAT_URL=http://host.docker.internal:11434/api/chat
+      - OLLAMA_MODEL=gpt-oss:20b-cloud
+      - MOCK_RDS_PORT=5432
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

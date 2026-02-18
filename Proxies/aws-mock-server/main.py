@@ -16,12 +16,26 @@ DEFAULT_OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gpt-oss:20b-cloud")
 
 app = FastAPI()
 
+import rds_handler
+
 @app.get("/")
 async def root():
-    return {"status": "running", "service": "AWS Bedrock Mock Proxy", "usage": "Use AWS CLI or SDK to invoke models at /model/{model_id}/invoke"}
+    return {"status": "running", "service": "AWS Bedrock Mock Proxy & RDS Mock", "usage": "Use AWS CLI or SDK to invoke models at /model/{model_id}/invoke or RDS actions at /"}
+
+@app.post("/")
+async def handle_root_post(request: Request):
+    content_type = request.headers.get("content-type", "")
+    if "application/x-www-form-urlencoded" in content_type:
+        # Check if it looks like an RDS request
+        form = await request.form()
+        if "Action" in form:
+            return await rds_handler.handle_rds_request(request)
+    
+    return JSONResponse(status_code=404, content={"error": "Not found or unsupported service request"})
 
 @app.get("/health")
 async def health():
+
     return {"status": "ok"}
 
 @app.post("/model/{model_id}/invoke")
