@@ -6,3 +6,5 @@ requests
 docker
 defusedxml
 python-multipart
+boto3
+psycopg2-binary

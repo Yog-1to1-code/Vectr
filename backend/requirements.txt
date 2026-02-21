@@ -3,3 +3,5 @@ uvicorn
 boto3
 python-dotenv
 PyGithub
+sqlalchemy
+psycopg2-binary
