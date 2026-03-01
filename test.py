@@ -1,36 +1,49 @@
 import httpx
 import asyncio
-import json # ADDED: for pretty formatting
+import json
+import os
+from dotenv import load_dotenv
 from issue_fetcher import fetch_issue 
 
-async def test_github_pat(pat: str):
+# Load variables from .env
+load_dotenv()
+
+async def test_github_pat():
+    # Retrieve the token from environment variables
+    pat = os.getenv("GITHUB_PAT")
+    
+    if not pat:
+        print("❌ Error: GITHUB_PAT not found in .env file")
+        return
+
     headers = {
         "Authorization": f"token {pat}", 
         "Accept": "application/vnd.github.v3+json"
     }
 
     async with httpx.AsyncClient() as client:
-        response = await client.get("https://api.github.com/user", headers=headers)
+        try:
+            response = await client.get("https://api.github.com/user", headers=headers)
+            response.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            print(f"❌ Failed! Status Code: {e.response.status_code}")
+            return False
 
-    if response.status_code == 200:
-        print(f"✅ Success! Logged in as: {response.json().get('login')}")
-        
-        print("Fetching Lyra issues...")
-        # Capture the returned data from your fetch_issue function
-        issues_data = await fetch_issue("google", "lyra", pat)
-        
-        # SAVE AS CLEAN JSON FILE
-        with open("issues.json", "w") as f:
-            json.dump(issues_data, f, indent=4)
-            refined_issue = [fetch_issue.issues["url"]for refined_isuue in fetch_issue.issues] 
-            refined_issue = refined_issue.replace("https://api.github.com/repos/","http://github.com/")
+    print(f"✅ Success! Logged in as: {response.json().get('login')}")
+    
+    print("Fetching issues and messages...")
+    # Capture the data from the fetch_issue function
+    issues_data = await fetch_issue("google", "lyra", pat)
+    
+    # Save the full data (including the issue body and comments) to JSON
+    with open("issues.json", "w") as f:
+        json.dump(issues_data, f, indent=4)
+    
+    # Extract only the browser-friendly URLs
+    refined_urls = [issue["url"] for issue in issues_data]
+    
+    print(f"🚀 Done! Check 'issues.json' for the full data.")
+    return refined_urls
 
-        
-        print("🚀 Done! Check 'issues.json' for the formatted data.")
-        print()
-        return refined_issue
-    else:
-        print(f"❌ Failed! Status Code: {response.status_code}")
-        return False
-token_to_test = "your_actual_ghp_token_here"
-asyncio.run(test_github_pat(token_to_test))
+if __name__ == "__main__":
+    asyncio.run(test_github_pat())

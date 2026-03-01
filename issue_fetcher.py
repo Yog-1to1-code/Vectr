@@ -1,43 +1,41 @@
 import httpx
-import asyncio
 from fastapi import HTTPException
 
-# ADDED 'repo_name' and 'pat' as arguments
 async def fetch_issue(org_name: str, repo_name: str, pat: str):
-    # FIXED: Added 'f' for f-string and corrected the path
     url = f"https://api.github.com/repos/{org_name}/{repo_name}/issues"
-    
     headers = {
-        # FIXED: Added 'f' for f-string to use the 'pat' variable
         "Authorization": f"token {pat}",
         "Accept": "application/vnd.github.v3+json"
     }
-    
     params = {
-        "state": "open",           # FIXED: Added quotes around "open"
-        "labels": "good first issue", # FIXED: GitHub API uses "labels" (plural)
+        "state": "open",
         "sort": "created",
-        "per_page": 50
+        "labels": "good first issue",
+        "per_page": 10 # Kept small for testing
     }
     
     async with httpx.AsyncClient() as client:
         response = await client.get(url, headers=headers, params=params)
-    
-    if response.status_code == 200:
-        global issues 
-        issue = response.json()
-        # Filter out Pull Requests (GitHub API treats PRs as issues)
-        only_issues = [i for i in issues if "pull_request" not in i]
-        print(f"Found {len(only_issues)} beginner issues in {repo_name}")
         
-    
+        if response.status_code != 200:
+            raise HTTPException(status_code=response.status_code, detail=f"GitHub Error: {response.text}")
 
-    elif response.status_code == 404:
-        raise HTTPException(status_code=404, detail="Repository not found")
-    else:
-        # FIXED: Added f-string formatting for the error message
-        raise HTTPException(status_code=response.status_code, detail=f"Github Error: {response.text}")
-
-# Testing it for AOSSIE (using the 'adit' repository as an example)
-token = "ghp_your_actual_token_here" 
-# asyncio.run(fetch_issue("AOSSIE", "adit", token))
+        all_data = response.json()
+        only_issues = [i for i in all_data if "pull_request" not in i]
+        
+        results = []
+        for issue in only_issues:
+            # Fetch comments (messages) for this specific issue
+            comments_resp = await client.get(issue["comments_url"], headers=headers)
+            comments = comments_resp.json() if comments_resp.status_code == 200 else []
+            
+            results.append({
+                "title": issue["title"],
+                "url": issue["html_url"],
+                "date": issue["created_at"],
+                "user": issue["user"]["login"],
+                "body": issue["body"],
+                "messages": [c["body"] for c in comments] # Extracting comment text
+            })
+            
+        return results

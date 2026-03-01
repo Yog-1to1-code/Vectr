@@ -1,105 +1,13 @@
 [
     {
-        "url": "https://api.github.com/repos/google/lyra/issues/51",
-        "repository_url": "https://api.github.com/repos/google/lyra",
-        "labels_url": "https://api.github.com/repos/google/lyra/issues/51/labels{/name}",
-        "comments_url": "https://api.github.com/repos/google/lyra/issues/51/comments",
-        "events_url": "https://api.github.com/repos/google/lyra/issues/51/events",
-        "html_url": "https://github.com/google/lyra/issues/51",
-        "id": 936079003,
-        "node_id": "MDU6SXNzdWU5MzYwNzkwMDM=",
-        "number": 51,
         "title": "Document library architecture",
-        "user": {
-            "login": "KOLANICH",
-            "id": 240344,
-            "node_id": "MDQ6VXNlcjI0MDM0NA==",
-            "avatar_url": "https://avatars.githubusercontent.com/u/240344?v=4",
-            "gravatar_id": "",
-            "url": "https://api.github.com/users/KOLANICH",
-            "html_url": "https://github.com/KOLANICH",
-            "followers_url": "https://api.github.com/users/KOLANICH/followers",
-            "following_url": "https://api.github.com/users/KOLANICH/following{/other_user}",
-            "gists_url": "https://api.github.com/users/KOLANICH/gists{/gist_id}",
-            "starred_url": "https://api.github.com/users/KOLANICH/starred{/owner}{/repo}",
-            "subscriptions_url": "https://api.github.com/users/KOLANICH/subscriptions",
-            "organizations_url": "https://api.github.com/users/KOLANICH/orgs",
-            "repos_url": "https://api.github.com/users/KOLANICH/repos",
-            "events_url": "https://api.github.com/users/KOLANICH/events{/privacy}",
-            "received_events_url": "https://api.github.com/users/KOLANICH/received_events",
-            "type": "User",
-            "user_view_type": "public",
-            "site_admin": false
-        },
-        "labels": [
-            {
-                "id": 2837850932,
-                "node_id": "MDU6TGFiZWwyODM3ODUwOTMy",
-                "url": "https://api.github.com/repos/google/lyra/labels/documentation",
-                "name": "documentation",
-                "color": "0075ca",
-                "default": true,
-                "description": "Improvements or additions to documentation"
-            },
-            {
-                "id": 2837850947,
-                "node_id": "MDU6TGFiZWwyODM3ODUwOTQ3",
-                "url": "https://api.github.com/repos/google/lyra/labels/good%20first%20issue",
-                "name": "good first issue",
-                "color": "7057ff",
-                "default": true,
-                "description": "Good for newcomers"
-            },
-            {
-                "id": 2837850949,
-                "node_id": "MDU6TGFiZWwyODM3ODUwOTQ5",
-                "url": "https://api.github.com/repos/google/lyra/labels/help%20wanted",
-                "name": "help wanted",
-                "color": "008672",
-                "default": true,
-                "description": "Extra attention is needed"
-            }
-        ],
-        "state": "open",
-        "locked": false,
-        "assignees": [],
-        "milestone": null,
-        "comments": 2,
-        "created_at": "2021-07-02T21:37:04Z",
-        "updated_at": "2025-05-08T07:03:52Z",
-        "closed_at": null,
-        "assignee": null,
-        "author_association": "NONE",
-        "type": null,
-        "active_lock_reason": null,
-        "sub_issues_summary": {
-            "total": 0,
-            "completed": 0,
-            "percent_completed": 0
-        },
-        "issue_dependencies_summary": {
-            "blocked_by": 0,
-            "total_blocked_by": 0,
-            "blocking": 0,
-            "total_blocking": 0
-        },
+        "url": "https://github.com/google/lyra/issues/51",
+        "date": "2021-07-02T21:37:04Z",
+        "user": "KOLANICH",
         "body": "It'd be nice if the lib had some docs (maybe in a form of a graph), describing its architecture at different levels of detail, including:\r\n\r\n* components present within the lib\r\n* their functionality, semantics and interfaces (not class interfaces, but what it consumes and produces)\r\n* components' interactions to other components and flows of data between them\r\n* possibilities to replace that component with something else, both other implementations of the same thing and implementations of completely different thing that may have similar effect\r\n* why each component is needed and if it is avoidable and impact of it being skipped or replaced\r\n",
-        "closed_by": null,
-        "reactions": {
-            "url": "https://api.github.com/repos/google/lyra/issues/51/reactions",
-            "total_count": 0,
-            "+1": 0,
-            "-1": 0,
-            "laugh": 0,
-            "hooray": 0,
-            "confused": 0,
-            "heart": 0,
-            "rocket": 0,
-            "eyes": 0
-        },
-        "timeline_url": "https://api.github.com/repos/google/lyra/issues/51/timeline",
-        "performed_via_github_app": null,
-        "state_reason": null,
-        "pinned_comment": null
+        "messages": [
+            "That is a great suggestion. The main APIs and integration test are documented using [Doxygen](https://github.com/google/lyra/blob/main/Doxyfile), but it definitely would be nice to document all the rest of the lower level components.",
+            "Hey! I'd love to take this on and help document the library architecture. Let me know if it's still open for contribution."
+        ]
     }
 ]
