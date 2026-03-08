@@ -7,3 +7,5 @@ docker
 defusedxml
 python-multipart
 sqlalchemy
+psycopg2-binary
+firebase
