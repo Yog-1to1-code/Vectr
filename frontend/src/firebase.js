@@ -3,7 +3,7 @@ import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 
 // Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyAa48ks-FB7N5syX-l9EGarY_Z116PFx_c",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: "vectr-de136.firebaseapp.com",
   projectId: "vectr-de136",
   storageBucket: "vectr-de136.firebasestorage.app",

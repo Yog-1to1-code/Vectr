@@ -61,3 +61,11 @@ class DashboardResponse(BaseModel):
     recommended_projects: List[DashboardProject] #User Selected project
     active_contributions: List[ContributionResponse]
     working_contributions: List[ContributionResponse]
+
+class GoogleAtuhentication(BaseModel):
+    email: str
+    name: Optional[str] = None
+
+class PATUpdate(BaseModel):
+    email: str
+    pat: str

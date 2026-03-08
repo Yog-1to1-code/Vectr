@@ -6,7 +6,7 @@ from database import Base
 class User(Base):
     __tablename__ = "UserInfo"
     email = Column(String(100), primary_key=True, nullable=False) 
-    github_pat = Column(String(255), nullable=False)  
+    github_pat = Column(String(255), nullable=True)  
     password = Column(String(100), nullable=False)   
     experience_lvl = Column(String(20), nullable=False) 
 

@@ -121,7 +121,7 @@ const Login = ({ theme, toggleTheme }) => {
       const { user, idToken } = await loginWithGoogleFirebase();
       console.log("✅ Firebase popup successful!", user.email);
 
-      const response = await fetch("http://localhost:8000/auth/firebase", {
+      const response = await fetch("http://localhost:8000/user/google-login", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${idToken}`,
@@ -210,6 +210,39 @@ const Login = ({ theme, toggleTheme }) => {
 };
 
 const Signup = ({ theme, toggleTheme }) => {
+  const navigate = useNavigate();
+
+  const handleGoogleLogin = async () => {
+    try {
+      console.log("🔵 Google Signup Clicked!");
+      const { user, idToken } = await loginWithGoogleFirebase();
+      console.log("✅ Firebase popup successful!", user.email);
+
+      const response = await fetch("http://localhost:8000/user/google-login", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${idToken}`,
+          "Content-Type": "application/json"
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        console.log("✅ Logged in/Signed up via backend:", data);
+        localStorage.setItem("userEmail", data.email);
+        alert(`Success! Account linked as ${data.email}`);
+        navigate("/dashboard");
+      } else {
+        console.error("❌ Backend signup failed:", data.detail);
+        alert("Backend Signup Failed: " + data.detail);
+      }
+    } catch (error) {
+      console.error("❌ Google Signup Error:", error);
+      alert("Google Sign-Up Error: " + error.message);
+    }
+  };
+
   return (
     <AuthLayout theme={theme} toggleTheme={toggleTheme}>
       <motion.form
@@ -242,6 +275,31 @@ const Signup = ({ theme, toggleTheme }) => {
           whileTap={{ scale: 0.98 }}
         >
           Create Account
+        </motion.button>
+
+        <motion.div className="divider" style={{ textAlign: 'center', margin: '1rem 0' }} variants={itemVariants}>
+          <span>or</span>
+        </motion.div>
+
+        <motion.button
+          type="button"
+          className="google-btn"
+          onClick={handleGoogleLogin}
+          variants={itemVariants}
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.98 }}
+          style={{
+            width: '100%',
+            padding: '12px',
+            borderRadius: '12px',
+            border: '1px solid var(--border)',
+            background: 'transparent',
+            color: 'var(--text-main)',
+            cursor: 'pointer',
+            fontWeight: '600'
+          }}
+        >
+          Sign up with Google
         </motion.button>
 
         <motion.div className="switch-auth" variants={itemVariants}>
