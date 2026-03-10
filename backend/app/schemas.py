@@ -3,7 +3,7 @@ from pydantic import BaseModel, computed_field
 from typing import List,Optional 
 
 
-#Tier 1 - User Settings 
+# Tier 1 - User Settings 
 class UserResponse(BaseModel):
     email: str
     raw_pat: str = "" 
@@ -22,50 +22,113 @@ class UserResponse(BaseModel):
 class ExperienceUpdate(BaseModel):
     experience_lvl: str
 
-
-
-#Tier - 2 (Repo Fetcher)
-class DashboardProject  (BaseModel):
-    org_name: str
-    project_name: str
-    github_link: str
-    description: Optional[str] = "No description provided."
-    tech_stack: str
-    stars: int
-    is_good_first_issue_friendly: bool
-
-
-#Tier - 3 (Tracking Users Progress)
-
-class Contribution(BaseModel):
-    repo_name: str
-    issue_title: str
-    issue_number: int
-    language: Optional[str] = "Unknown"
-    status: str
-
-class ContributionResponse(Contribution):
-    id: int
-    user_email: str
-
-    class Config:
-        from_attributes = True
-
-
-#Tier-5  (Shipper to show on dashboard)
-#What backend sends to frontend!
-class DashboardResponse(BaseModel):
-    user_email: str
-    experience_level: str
-    primary_language: str #User Selected Programming language
-    recommended_projects: List[DashboardProject] #User Selected project
-    active_contributions: List[ContributionResponse]
-    working_contributions: List[ContributionResponse]
-
+class PATUpdate(BaseModel):
+    email: str
+    pat: str
+    
 class GoogleAtuhentication(BaseModel):
     email: str
     name: Optional[str] = None
 
-class PATUpdate(BaseModel):
-    email: str
-    pat: str
+
+# Tier 2 - Main Dashboard Schemas (Matched to UI)
+
+class ContributionItem(BaseModel):
+    """Used for 'My Contributions' section"""
+    repo_name: str # e.g. "Org_name/Repo_name"
+    issue_title: str # e.g. "Issue #167: Issue title"
+    status: str # e.g. "Accepted", "Waiting", "Rejected", "Currently Working"
+
+class WorkingIssueItem(BaseModel):
+    """Used for 'Working Issues' section"""
+    repo_name: str 
+    issue_title: str
+    language: str # e.g. "C", "Java"
+
+class PullRequestItem(BaseModel):
+    """Used for 'Pull Requests' section"""
+    repo_name: str
+    issue_title: str
+    date_of_submission: str # e.g. "12/03/2026"
+    status: str # e.g. "Waiting"
+
+class CommitMapData(BaseModel):
+     """Used for generating the contribution graph"""
+     date: str
+     count: int
+
+class MainDashboardResponse(BaseModel):
+    """The complete payload for Main_Dashboard_screen"""
+    user_name: str # e.g. "Yog-1to1-code", gotten from Github
+    experience_level: str # e.g. "Beginner"
+    my_contributions: List[ContributionItem]
+    working_issues: List[WorkingIssueItem]
+    commit_map: List[CommitMapData]
+    pull_requests: List[PullRequestItem]
+
+
+# Tier 3 - Start Contributing Flow
+
+class OrganizationItem(BaseModel):
+    name: str # e.g. "facebook"
+    description: Optional[str]
+    avatar_url: Optional[str]
+    url: str # github html url
+    language: Optional[str]
+
+class StartContributionResponse(BaseModel):
+    """
+    If next_step is 'SELECT_LANGUAGE', languages will be populated.
+    If next_step is 'SELECT_ORG', organizations will be populated.
+    """
+    next_step: str # "SELECT_LANGUAGE" or "SELECT_ORG"
+    languages: Optional[List[str]] = None
+    organizations: Optional[List[OrganizationItem]] = None
+
+
+# Tier 4 - Issue Selection Flow
+
+class RepoItem(BaseModel):
+    name: str # e.g. "react"
+    full_name: str # e.g. "facebook/react"
+    description: Optional[str]
+    language: Optional[str]
+    open_issues_count: int
+    stars: int
+
+class IssueItem(BaseModel):
+    number: int
+    title: str
+    state: str
+    html_url: str
+    body: Optional[str] # Might be needed for Nova
+    labels: List[str]
+
+class RepoListResponse(BaseModel):
+    org_name: str
+    repos: List[RepoItem]
+
+class IssueListResponse(BaseModel):
+    repo_name: str
+    issues: List[IssueItem]
+# Tier 5 - AWS Bedrock Nova Integration
+
+# Tier 5 - AWS Bedrock Nova Integration
+
+class ChatMessage(BaseModel):
+    role: str # "user" or "assistant"
+    content: str
+    
+class CondensedIssue(BaseModel):
+    number: int
+    title: str
+    state: str
+    labels: List[str]
+
+class AskNovaRequest(BaseModel):
+    repo_name: str
+    issues_context: List[CondensedIssue] # Provide the list of currently open issues here
+    messages: List[ChatMessage] # Conversation history
+
+class AskNovaResponse(BaseModel):
+    reply: str

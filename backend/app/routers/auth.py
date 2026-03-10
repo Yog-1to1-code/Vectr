@@ -63,6 +63,7 @@ def google_login(request: Request, db: Session = Depends(get_db)):
         
     user = db.query(models.User).filter(models.User.email == email).first()
     
+    has_pat = False
     if not user:
         # Sign up the user automatically
         new_user = models.User(
@@ -74,8 +75,10 @@ def google_login(request: Request, db: Session = Depends(get_db)):
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
+    else:
+        has_pat = bool(user.github_pat)
         
-    return {"message": "Login Successful", "email": email}
+    return {"message": "Login Successful", "email": email, "has_pat": has_pat}
 
 
 #To update the exp lvl
