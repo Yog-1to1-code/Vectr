@@ -5,6 +5,7 @@ import os
 import models as models
 import app.schemas as schemas
 from database import get_db
+from app.utils.encryption import encrypt_pat
 
 routes = APIRouter(prefix="/user",tags=["Authentication"])
 
@@ -15,7 +16,9 @@ def signup(email: str, pat: str, password: str, level: str, db: Session = Depend
     if existing_user:
         raise HTTPException(status_code=400, detail="Email Already Registered")
         
-    new_user = models.User(email=email, github_pat=pat if pat else None, password=password, experience_lvl=level)
+    encrypted_pat = encrypt_pat(pat) if pat else None
+    
+    new_user = models.User(email=email, github_pat=encrypted_pat, password=password, experience_lvl=level)
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
@@ -63,6 +66,7 @@ def google_login(request: Request, db: Session = Depends(get_db)):
         
     user = db.query(models.User).filter(models.User.email == email).first()
     
+    has_pat = False
     if not user:
         # Sign up the user automatically
         new_user = models.User(
@@ -74,8 +78,10 @@ def google_login(request: Request, db: Session = Depends(get_db)):
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
+    else:
+        has_pat = bool(user.github_pat)
         
-    return {"message": "Login Successful", "email": email}
+    return {"message": "Login Successful", "email": email, "has_pat": has_pat}
 
 
 #To update the exp lvl
@@ -106,7 +112,7 @@ def save_pat(pat_data: schemas.PATUpdate, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="User Not Found")
         
     # 2. Save the PAT they just submitted
-    user.github_pat = pat_data.pat
+    user.github_pat = encrypt_pat(pat_data.pat)
     db.commit()
     
     return {"message": "GitHub PAT securely linked to your account!"}
