@@ -27,3 +27,4 @@ class Contributions(Base):
     issue_number = Column(Integer,nullable=False)
     user_email = Column(String, ForeignKey("UserInfo.email"))
     status = Column(String)
+
