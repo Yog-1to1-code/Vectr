@@ -1,5 +1,44 @@
+# Secrets
 .env
-vectr
-/backend/.env
-/frontend/Screens
+.env.*
+backend/.env
+frontend/.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.venv/
+venv/
+ENV/
+build/
+dist/
+*.egg-info/
+*.json
+!package.json
+!composer.json
+!tsconfig.json
+!jsconfig.json
+
+# Node
+node_modules/
+dist/
+dist-ssr
+*.local
+
+# Logs
+*.log
+out.txt
+x.txt
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project specific caches
+issues.json
+PRs.json
 test_pat_auth_script
