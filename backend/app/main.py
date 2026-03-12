@@ -1,14 +1,14 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware #To prevent Network Error 
-from app.routers import auth,dashboard,PAT_auth,contribution_flow,repos,ask_nova
+from app.routers import auth,dashboard,PAT_auth,contribution_flow,repos,ask_nova, repo
 #TO import Local Modules 
 import models
 
 
 from database import engine
-from dotenv import load_dotenv
-
-load_dotenv()
 try:
     models.Base.metadata.create_all(bind=engine)
 except Exception:
@@ -32,6 +32,7 @@ app.include_router(PAT_auth.routes)
 app.include_router(contribution_flow.routes)
 app.include_router(repos.routes)
 app.include_router(ask_nova.routes)
+app.include_router(repo.router)
 
 # API ROUTES
 @app.get('/')
