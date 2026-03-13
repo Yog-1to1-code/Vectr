@@ -12,10 +12,15 @@ def get_bedrock_client():
     try:
         # Relies on the host environment having AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
         # or having an IAM role assigned to the EC2 instance reading from .env
-        client = boto3.client(
-            service_name="bedrock-runtime",
-            region_name=os.getenv("AWS_REGION", "us-east-1")
-        )
+        client_kwargs = {
+            "service_name": "bedrock-runtime",
+            "region_name": os.getenv("AWS_REGION", "us-east-1")
+        }
+        endpoint_url = os.getenv("AWS_ENDPOINT_URL")
+        if endpoint_url:
+            client_kwargs["endpoint_url"] = endpoint_url
+            
+        client = boto3.client(**client_kwargs)
         return client
     except Exception as e:
         print(f"Error initializing Bedrock client: {e}")
@@ -70,30 +75,49 @@ def ask_nova(request: schemas.AskNovaRequest):
             "topP": 0.9,
         }
     }
-    
-    # Use Amazon Nova Pro or Lite depending on your model access
-    # e.g., amazon.nova-pro-v1:0 or amazon.nova-lite-v1:0
-    model_id = os.getenv("NOVA_MODEL_ID", "amazon.nova-lite-v1:0")
-    
     try:
-        response = client.invoke_model(
-            modelId=model_id,
-            body=json.dumps(body),
-            accept="application/json",
-            contentType="application/json"
-        )
-        
-        response_body = json.loads(response.get('body').read())
-        
-        # Extract reply text based on Nova inference output structure
-        reply_text = response_body.get('output', {}).get('message', {}).get('content', [{}])[0].get('text', "Nova couldn't generate a response.")
-        
-        return schemas.AskNovaResponse(reply=reply_text)
-        
-    except client.exceptions.AccessDeniedException:
-         raise HTTPException(status_code=403, detail="AWS credentials do not have permission to invoke Amazon Nova models.")
+        endpoint_url = os.getenv("AWS_ENDPOINT_URL")
+        if endpoint_url and "localhost" in endpoint_url or "127.0.0.1" in endpoint_url:
+            # INTERCEPT: Instead of using AWS/Bedrock, forward directly to local Ollama via standard HTTP
+            import requests as req
+            ollama_url = "http://127.0.0.1:11434/api/chat"
+            ollama_messages = [{"role": "system", "content": system_prompt}]
+            for msg in request.messages:
+                ollama_messages.append({"role": msg.role, "content": msg.content})
+                
+            payload = {
+                "model": "qwen3-coder:480b-cloud",  # Optional: Fallback model based on Ollama tags
+                "messages": ollama_messages,
+                "stream": False,
+                "options": {
+                    "temperature": 0.5,
+                    "top_p": 0.9,
+                }
+            }
+            res = req.post(ollama_url, json=payload)
+            res.raise_for_status()
+            reply_text = res.json().get('message', {}).get('content', "Ollama couldn't generate a response.")
+            return schemas.AskNovaResponse(reply=reply_text)
+            
+        else:
+            client = boto3.client(**client_kwargs)
+            body = {
+                "system": [{"text": system_prompt}],
+                "messages": formatted_messages,
+                "inferenceConfig": {"maxTokens": 1000, "temperature": 0.5, "topP": 0.9}
+            }
+            response = client.invoke_model(
+                modelId=os.getenv("NOVA_MODEL_ID", "amazon.nova-lite-v1:0"),
+                body=json.dumps(body),
+                accept="application/json",
+                contentType="application/json"
+            )
+            response_body = json.loads(response.get('body').read())
+            reply_text = response_body.get('output', {}).get('message', {}).get('content', [{}])[0].get('text', "")
+            return schemas.AskNovaResponse(reply=reply_text)
+            
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Bedrock invocation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"AI invocation error: {str(e)}")
 
 
 
@@ -139,18 +163,36 @@ def summarize_issue(request: schemas.SummarizeIssueRequest):
     }
 
     try:
-        response = client.invoke_model(
-            modelId=os.getenv("NOVA_MODEL_ID", "amazon.nova-lite-v1:0"),
-            body=json.dumps(body),
-            accept="application/json",
-            contentType="application/json"
-        )
-        
-        response_body = json.loads(response.get('body').read())
-        reply_text = response_body.get('output', {}).get('message', {}).get('content', [{}])[0].get('text', "")
+        endpoint_url = os.getenv("AWS_ENDPOINT_URL")
+        if endpoint_url and "localhost" in endpoint_url or "127.0.0.1" in endpoint_url:
+            import requests as req
+            ollama_url = "http://127.0.0.1:11434/api/chat"
+            payload = {
+                "model": "qwen3-coder:480b-cloud",
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": "Please provide the summary JSON."}
+                ],
+                "stream": False,
+                "options": {
+                    "temperature": 0.2,
+                    "top_p": 0.9,
+                }
+            }
+            res = req.post(ollama_url, json=payload)
+            res.raise_for_status()
+            reply_text = res.json().get('message', {}).get('content', "")
+        else:
+            response = client.invoke_model(
+                modelId=os.getenv("NOVA_MODEL_ID", "amazon.nova-lite-v1:0"),
+                body=json.dumps(body),
+                accept="application/json",
+                contentType="application/json"
+            )
+            response_body = json.loads(response.get('body').read())
+            reply_text = response_body.get('output', {}).get('message', {}).get('content', [{}])[0].get('text', "")
 
-        # 4. Clean and Parse the JSON from Amazon Nova's text response
-        # Sometimes models wrap JSON in ```json ... ``` even when told not to. 
+        # 4. Clean and Parse the JSON from AI's text response
         reply_text = reply_text.strip()
         if reply_text.startswith("```json"):
             reply_text = reply_text[7:-3].strip()
