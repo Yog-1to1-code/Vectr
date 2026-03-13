@@ -35,7 +35,7 @@ def login(email: str, password: str, db: Session = Depends(get_db)):
     if not user or user.password != password:
         raise HTTPException(status_code=401, detail="Invalid username or password")
         
-    return {"message": "Login Successful", "email": user.email}
+    return {"message": "Login Successful", "email": user.email, "has_pat": bool(user.github_pat)}
 
 @routes.post("/google-login")
 def google_login(request: Request, db: Session = Depends(get_db)):

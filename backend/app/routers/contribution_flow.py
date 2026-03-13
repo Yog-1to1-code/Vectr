@@ -50,8 +50,12 @@ def start_contribution(
     try:
         if search_query:
             # SEARCH ORGS: https://docs.github.com/en/rest/search/search?apiVersion=2022-11-28#search-users
-            search_url = f"https://api.github.com/search/users?q={search_query}+type:org&per_page=10"
-            res = rq.get(search_url, headers=headers)
+            search_url = "https://api.github.com/search/users"
+            params = {
+                "q": f"{search_query} type:org",
+                "per_page": 10
+            }
+            res = rq.get(search_url, headers=headers, params=params)
             res.raise_for_status()
             
             items = res.json().get("items", [])
@@ -67,8 +71,15 @@ def start_contribution(
                 )
         elif language:
             # FIND ORGS BY LANGUAGE (Query Github Repos by Language, then extract orgs)
-            search_url = f"https://api.github.com/search/repositories?q=language:{language}&sort=stars&order=desc&per_page=20"
-            res = rq.get(search_url, headers=headers)
+            search_language = "HTML" if language == "HTML/CSS" else language
+            search_url = "https://api.github.com/search/repositories"
+            params = {
+                "q": f"language:{search_language}",
+                "sort": "stars",
+                "order": "desc",
+                "per_page": 20
+            }
+            res = rq.get(search_url, headers=headers, params=params)
             res.raise_for_status()
             
             items = res.json().get("items", [])

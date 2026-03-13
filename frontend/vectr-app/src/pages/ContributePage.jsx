@@ -43,6 +43,11 @@ export default function ContributePage() {
                 setStep(FLOW_STEPS.SELECT_ORG);
             }
         } catch (err) {
+            if (err.message && err.message.toLowerCase().includes('pat is missing')) {
+                showToast('Please set your GitHub Personal Access Token to continue.', 'error');
+                navigate(ROUTES.PAT);
+                return;
+            }
             // If backend not ready, show language selection with defaults
             setLanguages(SUPPORTED_LANGUAGES);
             setShowLangModal(true);
@@ -63,9 +68,12 @@ export default function ContributePage() {
             setShowOrgModal(true);
             setStep(FLOW_STEPS.SELECT_ORG);
         } catch (err) {
+            if (err.message && err.message.toLowerCase().includes('pat is missing')) {
+                showToast('Please set your GitHub Personal Access Token to continue.', 'error');
+                navigate(ROUTES.PAT);
+                return;
+            }
             setError(err.message || 'Failed to fetch organizations');
-            setShowOrgModal(true);
-            setStep(FLOW_STEPS.SELECT_ORG);
         } finally {
             setLoading(false);
         }
@@ -221,7 +229,7 @@ export default function ContributePage() {
                 </div>
 
                 {/* Ask Nova */}
-                <div className="lg:col-span-4">
+                <div className="lg:col-span-4 min-h-0 h-full">
                     <NovaChat
                         repoName={selectedRepo ? `${selectedOrg?.name}/${selectedRepo.name}` : ''}
                         issuesContext={condensedIssues}

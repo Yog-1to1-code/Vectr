@@ -47,8 +47,11 @@ def get_org_repos(
         
         for repo in raw_repos:
             # Optionally filter by language if the user is a beginner and selected one
-            if language and repo.get("language") and repo.get("language").lower() != language.lower():
-                continue
+            if language:
+                search_language = "HTML" if language == "HTML/CSS" else language
+                repo_language = repo.get("language")
+                if repo_language and repo_language.lower() != search_language.lower():
+                    continue
                 
             repos.append(
                 schemas.RepoItem(
