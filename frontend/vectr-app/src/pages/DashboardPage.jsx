@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { dashboardAPI } from '../services/api';
-import { ROUTES } from '../constants';
+import { dashboardAPI, repoAPI } from '../services/api';
+import { ROUTES, buildIssuePath, STATUS, STATUS_COLORS } from '../constants';
 import VectrLogo from '../components/VectrLogo';
 import StatusBadge from '../components/StatusBadge';
 import CommitMap from '../components/CommitMap';
@@ -14,6 +14,7 @@ export default function DashboardPage() {
     const [dashboard, setDashboard] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
+    const [navigatingTo, setNavigatingTo] = useState(null);
 
     useEffect(() => {
         if (!user?.email) return;
@@ -33,6 +34,38 @@ export default function DashboardPage() {
         fetchDashboard();
         return () => { cancelled = true; };
     }, [user?.email]);
+
+    const handleIssueClick = async (repoName, issueNum, blockType) => {
+        if (!issueNum) return;
+        
+        const navId = `${blockType}-${repoName}#${issueNum}`;
+        setNavigatingTo(navId);
+
+        try {
+            const org = repoName.split('/')[0];
+            const repo = repoName.split('/')[1] || '';
+            
+            // We need to fetch the issue details before navigating because IssueDashboardPage expects it in state
+            const data = await repoAPI.getRepoIssues(org, repo, user.email);
+            const targetIssue = data.issues?.find(i => i.number.toString() === issueNum.toString());
+            
+            navigate(buildIssuePath(org, repo, issueNum), { 
+                state: { 
+                    issue: targetIssue || { title: `Issue #${issueNum}` }, 
+                    repoName, 
+                    issues: data.issues || [] 
+                } 
+            });
+        } catch (err) {
+            console.error("Failed to fetch issue details for navigation:", err);
+            // Fallback navigate
+            const org = repoName.split('/')[0];
+            const repo = repoName.split('/')[1] || '';
+            navigate(buildIssuePath(org, repo, issueNum), { state: { repoName }});
+        } finally {
+            setNavigatingTo(null);
+        }
+    };
 
     const displayName = dashboard?.user_name
         || user?.githubUsername
@@ -96,16 +129,30 @@ export default function DashboardPage() {
                                         </button>
                                     </div>
                                 ) : (
-                                    contributions.map((c, i) => (
-                                        <div key={i} className="p-4 rounded-lg border border-border-default/50 hover:border-accent-cyan/30 transition-all cursor-pointer group"
-                                            style={{ background: 'rgba(19,29,47,0.5)' }}>
-                                            <div className="flex items-center justify-between">
-                                                <p className="text-text-muted text-xs">{c.repo_name}</p>
-                                                <StatusBadge status={c.status} />
+                                    contributions.map((c, i) => {
+                                        const match = c.issue_title.match(/#(\d+)/);
+                                        const issueNum = match ? match[1] : '';
+
+                                        return (
+                                            <div 
+                                                key={i} 
+                                                onClick={() => handleIssueClick(c.repo_name, issueNum, 'contributions')}
+                                                className={`p-4 rounded-lg border border-border-default/50 transition-all group relative overflow-hidden ${issueNum ? 'cursor-pointer hover:border-accent-cyan/30 hover:bg-white/5 active:scale-[0.98]' : ''}`}
+                                                style={{ background: 'rgba(19,29,47,0.5)' }}
+                                            >
+                                                {navigatingTo === `contributions-${c.repo_name}#${issueNum}` && (
+                                                    <div className="absolute inset-0 bg-background-main/80 backdrop-blur-sm z-10 flex items-center justify-center">
+                                                        <span className="w-5 h-5 rounded-full border-2 border-accent-cyan border-t-transparent animate-spin"></span>
+                                                    </div>
+                                                )}
+                                                <div className="flex items-center justify-between">
+                                                    <p className="text-text-muted text-xs">{c.repo_name}</p>
+                                                    <StatusBadge status={c.status} />
+                                                </div>
+                                                <p className="text-text-primary font-medium mt-1 group-hover:text-accent-cyan transition-colors">{c.issue_title}</p>
                                             </div>
-                                            <p className="text-text-primary font-medium mt-1 group-hover:text-accent-cyan transition-colors">{c.issue_title}</p>
-                                        </div>
-                                    ))
+                                        );
+                                    })
                                 )}
                             </div>
                         </div>
@@ -125,18 +172,34 @@ export default function DashboardPage() {
                                 {workingIssues.length === 0 ? (
                                     <p className="text-text-muted text-sm text-center py-6">No active issues</p>
                                 ) : (
-                                    workingIssues.map((w, i) => (
-                                        <div key={i} className="p-3 rounded-lg border border-border-default/30" style={{ background: 'rgba(19,29,47,0.5)' }}>
-                                            <p className="text-text-muted text-xs">{w.repo_name}</p>
-                                            <p className="text-text-primary text-sm font-medium mt-0.5">{w.issue_title}</p>
-                                            {w.language && (
-                                                <span className="mt-1.5 inline-block px-2 py-0.5 rounded text-xs font-semibold"
-                                                    style={{ background: 'rgba(56,189,248,0.15)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.3)' }}>
-                                                    {w.language}
-                                                </span>
-                                            )}
-                                        </div>
-                                    ))
+                                    workingIssues.map((w, i) => {
+                                        // Extract issue number safely from title (e.g. "Issue #123: ...")
+                                        const match = w.issue_title.match(/#(\d+)/);
+                                        const issueNum = match ? match[1] : '';
+                                        
+                                        return (
+                                            <div 
+                                                key={i} 
+                                                onClick={() => handleIssueClick(w.repo_name, issueNum, 'working')}
+                                                className={`p-3 rounded-lg border border-border-default/30 relative overflow-hidden transition-all ${issueNum ? 'cursor-pointer hover:border-accent-cyan/50 hover:bg-white/5 active:scale-[0.98]' : ''}`} 
+                                                style={{ background: 'rgba(19,29,47,0.5)' }}
+                                            >
+                                                {navigatingTo === `working-${w.repo_name}#${issueNum}` && (
+                                                    <div className="absolute inset-0 bg-background-main/80 backdrop-blur-sm z-10 flex items-center justify-center">
+                                                        <span className="w-5 h-5 rounded-full border-2 border-accent-cyan border-t-transparent animate-spin"></span>
+                                                    </div>
+                                                )}
+                                                <p className="text-text-muted text-xs">{w.repo_name}</p>
+                                                <p className="text-text-primary text-sm font-medium mt-0.5">{w.issue_title}</p>
+                                                {w.language && (
+                                                    <span className="mt-1.5 inline-block px-2 py-0.5 rounded text-xs font-semibold"
+                                                        style={{ background: 'rgba(56,189,248,0.15)', color: '#38bdf8', border: '1px solid rgba(56,189,248,0.3)' }}>
+                                                        {w.language}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        );
+                                    })
                                 )}
                             </div>
                         </div>
@@ -159,18 +222,37 @@ export default function DashboardPage() {
                                 {pullRequests.length === 0 ? (
                                     <p className="text-text-muted text-sm text-center py-6">No pull requests yet</p>
                                 ) : (
-                                    pullRequests.map((pr, i) => (
-                                        <div key={i} className="p-3 rounded-lg flex items-center justify-between border border-border-default/30" style={{ background: 'rgba(19,29,47,0.5)' }}>
-                                            <div className="min-w-0">
-                                                <p className="text-text-muted text-xs">{pr.repo_name}</p>
-                                                <p className="text-text-primary text-sm font-medium truncate">{pr.issue_title}</p>
+                                    pullRequests.map((pr, i) => {
+                                        const match = pr.issue_title.match(/#(\d+)/);
+                                        const issueNum = match ? match[1] : '';
+                                        
+                                        return (
+                                            <div 
+                                                key={i} 
+                                                onClick={() => handleIssueClick(pr.repo_name, issueNum, 'pr')}
+                                                className={`p-3 rounded-lg border border-border-default/30 flex items-center justify-between relative overflow-hidden transition-all ${issueNum ? 'cursor-pointer hover:border-accent-cyan/50 hover:bg-white/5 active:scale-[0.98]' : ''}`} 
+                                                style={{ background: 'rgba(19,29,47,0.5)' }}
+                                            >
+                                                {navigatingTo === `pr-${pr.repo_name}#${issueNum}` && (
+                                                    <div className="absolute inset-0 bg-background-main/80 backdrop-blur-sm z-10 flex items-center justify-center">
+                                                        <span className="w-5 h-5 rounded-full border-2 border-accent-cyan border-t-transparent animate-spin"></span>
+                                                    </div>
+                                                )}
+                                                <div>
+                                                    <p className="text-text-muted text-xs">{pr.repo_name} • {pr.date_of_submission}</p>
+                                                    <p className="text-text-primary text-sm font-medium mt-0.5 text-ellipsis overflow-hidden whitespace-nowrap max-w-[200px]" title={pr.issue_title}>{pr.issue_title}</p>
+                                                </div>
+                                                <span className="px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border"
+                                                    style={{
+                                                        background: STATUS_COLORS[pr.status]?.bg || STATUS_COLORS[STATUS.UNKNOWN].bg,
+                                                        color: STATUS_COLORS[pr.status]?.text || STATUS_COLORS[STATUS.UNKNOWN].text,
+                                                        borderColor: STATUS_COLORS[pr.status]?.border || STATUS_COLORS[STATUS.UNKNOWN].border
+                                                    }}>
+                                                    {pr.status}
+                                                </span>
                                             </div>
-                                            <div className="flex items-center gap-3 shrink-0 ml-3">
-                                                {pr.date_of_submission && <span className="text-text-muted text-xs">{pr.date_of_submission}</span>}
-                                                <StatusBadge status={pr.status} />
-                                            </div>
-                                        </div>
-                                    ))
+                                        );
+                                    })
                                 )}
                             </div>
                         </div>

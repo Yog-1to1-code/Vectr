@@ -75,7 +75,7 @@ async def _invoke_nova_for_analysis(client, repo_name: str, tree: str, readme: s
             import requests as req
             ollama_url = "http://127.0.0.1:11434/api/chat"
             payload = {
-                "model": "qwen3-coder:480b-cloud",
+                "model": "us.amazon.nova-2-lite:v1.0",
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_msg}

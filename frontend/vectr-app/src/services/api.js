@@ -102,6 +102,15 @@ export const contributionAPI = {
         if (searchQuery) params.append('search_query', searchQuery);
         return api.get(`/contribution/start?${params}`).then(r => r.data);
     },
+
+    submitPR: (email, repoName, issueNumber, title, body) =>
+        api.post('/contribution/submit-pr', {
+            user_email: email,
+            repo_name: repoName,
+            issue_number: parseInt(issueNumber),
+            title,
+            body
+        }).then(r => r.data),
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -147,6 +156,18 @@ export const novaAPI = {
             repo_name: repoName,
             active_issue_number: parseInt(activeIssueNumber)
         }).then(r => r.data),
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  PROGRESS
+// ═══════════════════════════════════════════════════════════════════
+
+export const progressAPI = {
+    get: (userEmail, repoName, issueNumber) =>
+        api.get(`/progress/${encodeURIComponent(userEmail)}/${encodeURIComponent(repoName)}/${issueNumber}`).then(r => r.data),
+    
+    save: (payload) =>
+        api.post('/progress/', payload).then(r => r.data),
 };
 
 export default api;

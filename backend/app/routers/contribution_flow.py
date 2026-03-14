@@ -126,3 +126,36 @@ def start_contribution(
         raise HTTPException(status_code=e.response.status_code, detail="Failed to fetch data from GitHub.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching organizations: {str(e)}")
+
+@routes.post("/submit-pr")
+def submit_pr(req: schemas.SubmitPRRequest, db: Session = Depends(get_db)):
+    # 1. Verify User
+    user = db.query(models.User).filter(models.User.email == req.user_email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User Not Found")
+
+    # 2. Add or Update Contributions 
+    contrib = db.query(models.Contributions).filter(
+        models.Contributions.user_email == req.user_email,
+        models.Contributions.repo_name == req.repo_name,
+        models.Contributions.issue_number == req.issue_number
+    ).first()
+
+    if contrib:
+        contrib.status = "Waiting"
+        contrib.pr_sent = True
+    else:
+        new_contrib = models.Contributions(
+            user_email=req.user_email,
+            repo_name=req.repo_name,
+            issue_number=req.issue_number,
+            issue_title=req.title or f"Issue #{req.issue_number}",
+            language="Unknown",
+            status="Waiting",
+            pr_sent=True
+        )
+        db.add(new_contrib)
+
+    db.commit()
+
+    return {"detail": "PR submitted successfully", "status": "Waiting"}

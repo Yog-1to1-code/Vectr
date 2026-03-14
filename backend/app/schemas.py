@@ -151,4 +151,35 @@ class FetchCommitsRequest(BaseModel):
     active_issue_number: int
 
 class FetchCommitsResponse(BaseModel):
-    commits: List[str]
+    commits: List[str]
+
+# Tier 6 - Contribution Progress Save State
+
+class SaveProgressRequest(BaseModel):
+    user_email: str
+    repo_name: str
+    issue_number: int
+    issue_title: Optional[str] = None
+    language: Optional[str] = None
+    issue_summary: Optional[str] = None
+    final_approach: Optional[str] = None
+    git_commands: Optional[str] = None
+    test_results: Optional[str] = None
+    chat_history: Optional[str] = None # Stringified JSON array
+
+class ProgressResponse(BaseModel):
+    user_email: str
+    repo_name: str
+    issue_number: int
+    issue_summary: Optional[str] = None
+    final_approach: Optional[str] = None
+    git_commands: Optional[str] = None
+    test_results: Optional[str] = None
+    chat_history: Optional[str] = None # Stringified JSON array
+
+class SubmitPRRequest(BaseModel):
+    user_email: str
+    repo_name: str
+    issue_number: int
+    title: str
+    body: str

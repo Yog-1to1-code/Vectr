@@ -107,7 +107,7 @@ async def ask_nova(request: schemas.AskNovaRequest, db: Session = Depends(get_db
                 ollama_messages.append({"role": msg.role, "content": msg.content})
                 
             payload = {
-                "model": "qwen3-coder:480b-cloud",  # Optional: Fallback model based on Ollama tags
+                "model": "us.amazon.nova-2-lite:v1.0",  # Optional: Fallback model based on Ollama tags
                 "messages": ollama_messages,
                 "stream": False,
                 "options": {
@@ -216,7 +216,7 @@ async def summarize_issue(request: schemas.SummarizeIssueRequest, background_tas
             import requests as req
             ollama_url = "http://127.0.0.1:11434/api/chat"
             payload = {
-                "model": "qwen3-coder:480b-cloud",
+                "model": "us.amazon.nova-2-lite:v1.0",
                 "messages": [
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": "Please provide the summary JSON."}

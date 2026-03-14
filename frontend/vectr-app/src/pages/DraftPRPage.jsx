@@ -5,6 +5,7 @@ import { ROUTES } from '../constants';
 import { useToast } from '../components/Toast';
 import VectrLogo from '../components/VectrLogo';
 import NovaChat from '../components/NovaChat';
+import { contributionAPI } from '../services/api';
 
 export default function DraftPRPage() {
     const { org, repo, issueNumber } = useParams();
@@ -37,8 +38,7 @@ export default function DraftPRPage() {
         }
         setSending(true);
         try {
-            // TODO: integrate with backend PR creation endpoint when ready
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            await contributionAPI.submitPR(user.email, repoName, issueNumber, prTitle, prBody);
             setSent(true);
             showToast('Pull Request submitted successfully!', 'success');
             setTimeout(() => navigate(ROUTES.DASHBOARD), 2000);

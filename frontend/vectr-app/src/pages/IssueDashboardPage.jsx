@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { novaAPI } from '../services/api';
+import { novaAPI, progressAPI } from '../services/api';
 import { buildDraftPRPath, ROUTES } from '../constants';
 import { useToast } from '../components/Toast';
 import VectrLogo from '../components/VectrLogo';
@@ -28,6 +28,8 @@ export default function IssueDashboardPage() {
     const [summarizing, setSummarizing] = useState(true);
     const [summaryError, setSummaryError] = useState('');
     const [refreshingCommits, setRefreshingCommits] = useState(false);
+    const [chatMessages, setChatMessages] = useState([]);
+    const [isSaving, setIsSaving] = useState(false);
 
     // Auto-summarize via Amazon Nova on mount
     useEffect(() => {
@@ -35,6 +37,25 @@ export default function IssueDashboardPage() {
         const fetchSummary = async () => {
             setSummarizing(true);
             setSummaryError('');
+            
+            try {
+                // Try to load saved progress first
+                const saved = await progressAPI.get(user.email, repoName, issueNumber);
+                if (!cancelled && saved && (saved.issue_summary || saved.chat_history !== '[]')) {
+                    setIssueSummary(saved.issue_summary || '');
+                    setFinalApproach(saved.final_approach || '');
+                    setGitCommands(saved.git_commands || '');
+                    setTestResults(saved.test_results || '');
+                    try {
+                        const parsedHistory = JSON.parse(saved.chat_history || '[]');
+                        setChatMessages(prev => [...prev, ...parsedHistory]);
+                    } catch(e) {}
+                    setSummarizing(false);
+                    return; // Skip generation since we loaded progress
+                }
+            } catch (err) {
+                console.error("Failed to load progress:", err);
+            }
             
             const isNovaEnabled = import.meta.env.VITE_USE_NOVA !== 'false';
             if (!isNovaEnabled) {
@@ -77,7 +98,51 @@ export default function IssueDashboardPage() {
         };
         fetchSummary();
         return () => { cancelled = true; };
-    }, [repoName, issueNumber, issue.title, issue.body, repo]);
+    }, [repoName, issueNumber, issue.title, issue.body, repo, user?.email]);
+
+    // Auto-save logic (debounced)
+    useEffect(() => {
+        if (!user?.email || !repoName || !issueNumber) return;
+        
+        const timeout = setTimeout(() => {
+            progressAPI.save({
+                user_email: user.email,
+                repo_name: repoName,
+                issue_number: parseInt(issueNumber),
+                issue_title: issue.title || `Issue #${issueNumber}`,
+                issue_summary: issueSummary,
+                final_approach: finalApproach,
+                git_commands: gitCommands,
+                test_results: testResults,
+                chat_history: JSON.stringify(chatMessages)
+            }).catch(e => console.error("Auto-save failed", e));
+        }, 5000);
+        
+        return () => clearTimeout(timeout);
+    }, [issueSummary, finalApproach, gitCommands, testResults, chatMessages, summarizing, user?.email, repoName, issueNumber]);
+    
+    const saveProgress = async () => {
+        if (!user?.email) return;
+        setIsSaving(true);
+        try {
+            await progressAPI.save({
+                user_email: user.email,
+                repo_name: repoName,
+                issue_number: parseInt(issueNumber),
+                issue_title: issue.title || `Issue #${issueNumber}`,
+                issue_summary: issueSummary,
+                final_approach: finalApproach,
+                git_commands: gitCommands,
+                test_results: testResults,
+                chat_history: JSON.stringify(chatMessages)
+            });
+            showToast('Progress saved successfully', 'success');
+        } catch (err) {
+            showToast('Failed to save progress', 'error');
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     const retrySummarize = () => {
         setSummarizing(true);
@@ -128,6 +193,21 @@ export default function IssueDashboardPage() {
                         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
                         </svg>
+                    </button>
+                    <button 
+                        onClick={saveProgress}
+                        disabled={isSaving || summarizing}
+                        className="btn-secondary text-sm flex items-center gap-2"
+                        title="Save Progress"
+                    >
+                        {isSaving ? <span className="spinner small"></span> : (
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                                <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                                <polyline points="7 3 7 8 15 8"></polyline>
+                            </svg>
+                        )}
+                        <span>Save</span>
                     </button>
                     <button
                         onClick={() => navigate(buildDraftPRPath(org, repo, issueNumber), {
@@ -278,7 +358,13 @@ export default function IssueDashboardPage() {
 
                 {/* Right Column — Ask Nova */}
                 <div className="min-h-0 h-full">
-                    <NovaChat repoName={repoName} issuesContext={condensedIssues} activeIssueNumber={issueNumber} />
+                    <NovaChat 
+                        repoName={repoName} 
+                        issuesContext={condensedIssues} 
+                        activeIssueNumber={issueNumber}
+                        externalMessages={chatMessages}
+                        setExternalMessages={setChatMessages}
+                    />
                 </div>
             </div>
         </>
