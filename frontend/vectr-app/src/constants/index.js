@@ -50,7 +50,10 @@ export const EXPERIENCE_LEVELS = [
 
 // ─── Supported Languages ────────────────────────────────────────────
 export const SUPPORTED_LANGUAGES = [
-    'Python', 'JavaScript', 'TypeScript', 'Java', 'C++', 'C', 'Go', 'Rust', 'HTML/CSS', 'Ruby', 'Swift', 'Kotlin',
+    'Python', 'JavaScript', 'TypeScript', 'Java', 'C++', 'C', 'C#', 'Go', 'Rust', 'HTML/CSS', 
+    'Ruby', 'Swift', 'Kotlin', 'PHP', 'Dart', 'Scala', 'Shell', 'Objective-C', 'R', 'Lua',
+    'Perl', 'Haskell', 'Elixir', 'Clojure', 'Groovy', 'MATLAB', 'Assembly', 'Vue', 'React',
+    'Svelte', 'Angular', 'SQL', 'NoSQL', 'Solidity', 'WebAssembly'
 ];
 
 // ─── Contribution Flow Steps ────────────────────────────────────────

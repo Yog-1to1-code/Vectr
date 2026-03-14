@@ -125,11 +125,12 @@ export const repoAPI = {
 // ═══════════════════════════════════════════════════════════════════
 
 export const novaAPI = {
-    ask: (repoName, issuesContext, messages) =>
+    ask: (repoName, issuesContext, messages, activeIssueNumber = null) =>
         api.post('/nova/ask', {
             repo_name: repoName,
             issues_context: issuesContext,
             messages,
+            active_issue_number: activeIssueNumber ? parseInt(activeIssueNumber) : null
         }).then(r => r.data),
 
     summarize: (repoName, issueNumber, issueTitle, issueBody, comments = []) =>
@@ -139,6 +140,12 @@ export const novaAPI = {
             issue_title: issueTitle,
             issue_body: issueBody || '',
             comments,
+        }).then(r => r.data),
+        
+    fetchCommits: (repoName, activeIssueNumber) =>
+        api.post('/nova/commits', {
+            repo_name: repoName,
+            active_issue_number: parseInt(activeIssueNumber)
         }).then(r => r.data),
 };
 

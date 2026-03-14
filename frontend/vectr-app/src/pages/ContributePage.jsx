@@ -25,6 +25,10 @@ export default function ContributePage() {
     const [error, setError] = useState('');
     const [showLangModal, setShowLangModal] = useState(false);
     const [showOrgModal, setShowOrgModal] = useState(false);
+    
+    // Search states
+    const [langSearch, setLangSearch] = useState('');
+    const [orgSearch, setOrgSearch] = useState('');
 
     useEffect(() => { initFlow(); }, []);
 
@@ -111,6 +115,38 @@ export default function ContributePage() {
         }
     };
 
+    const handleFallbackOrgSearch = async (orgName) => {
+        setLoading(true);
+        setError('');
+        try {
+            // Fetch directly from github without Auth header
+            const res = await fetch(`https://api.github.com/users/${encodeURIComponent(orgName.trim())}`);
+            if (!res.ok) {
+                if (res.status === 404) throw new Error('Organization or user not found on GitHub');
+                throw new Error('Failed to fetch from GitHub');
+            }
+            const data = await res.json();
+            
+            // Note: A user or org is fine. We just map it to the expected structure.
+            const newOrg = {
+                name: data.login,
+                description: data.description || '',
+                avatar_url: data.avatar_url,
+                url: data.html_url,
+                language: selectedLang
+            };
+            
+            // Add to the top of our list so they see it
+            setOrgs([newOrg, ...orgs]);
+            setSelectedOrg(newOrg);
+            setOrgSearch(''); // clear search so it shows in the list
+        } catch (err) {
+            setError(err.message || 'Error fetching from GitHub');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleIssueSelect = (issue) => {
         navigate(buildIssuePath(selectedOrg.name, selectedRepo.name, issue.number), {
             state: { issue, repoName: `${selectedOrg.name}/${selectedRepo.name}`, issues }
@@ -163,7 +199,7 @@ export default function ContributePage() {
             )}
 
             {/* 3-Column Layout */}
-            <div className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6" style={{ height: 'calc(100vh - 73px)' }}>
+            <div className="p-4 grid grid-cols-1 lg:grid-cols-12 gap-4" style={{ height: 'calc(100vh - 73px)' }}>
                 {/* Repo List */}
                 <div className="lg:col-span-3 glass-card p-4 overflow-y-auto">
                     <div className="flex items-center justify-between mb-4">
@@ -240,11 +276,22 @@ export default function ContributePage() {
             {/* ── Language Selection Modal ── */}
             {showLangModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => { }}>
-                    <div className="glass-card-accent w-full max-w-2xl p-6 m-4 slide-up" role="dialog" aria-label="Select Language">
+                    <div className="glass-card-accent w-full max-w-2xl p-6 m-4 slide-up flex flex-col max-h-[80vh]" role="dialog" aria-label="Select Language">
                         <h3 className="text-lg font-semibold text-text-primary mb-2">Select Language</h3>
                         <p className="text-text-muted text-sm mb-6">Choose a language to filter relevant organizations and repositories</p>
-                        <div className="flex flex-wrap gap-2 mb-6">
-                            {(languages.length > 0 ? languages : SUPPORTED_LANGUAGES).map((lang, i) => (
+                        <div className="mb-4">
+                            <input 
+                                type="text"
+                                placeholder="Search languages..."
+                                value={langSearch}
+                                onChange={(e) => setLangSearch(e.target.value)}
+                                className="w-full bg-bg-panel border border-border-default/50 rounded-lg px-4 py-2 text-text-primary focus:outline-none focus:border-accent-cyan"
+                            />
+                        </div>
+                        <div className="flex flex-wrap gap-2 mb-6 overflow-y-auto">
+                            {(languages.length > 0 ? languages : SUPPORTED_LANGUAGES)
+                                .filter(lang => lang.toLowerCase().includes(langSearch.toLowerCase()))
+                                .map((lang, i) => (
                                 <button key={i} onClick={() => setSelectedLang(lang)}
                                     className={`px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${selectedLang === lang
                                             ? 'bg-accent-cyan/20 text-accent-cyan border border-accent-cyan'
@@ -278,11 +325,36 @@ export default function ContributePage() {
                             <h3 className="text-lg font-semibold text-text-primary">Select Organisation</h3>
                         </div>
                         <p className="text-text-muted text-sm mb-6">Choose an organization to explore its repositories</p>
+                        <div className="mb-4">
+                            <input 
+                                type="text"
+                                placeholder="Search organizations..."
+                                value={orgSearch}
+                                onChange={(e) => setOrgSearch(e.target.value)}
+                                className="w-full bg-bg-panel border border-border-default/50 rounded-lg px-4 py-2 text-text-primary focus:outline-none focus:border-accent-cyan"
+                            />
+                        </div>
                         <div className="flex-1 overflow-y-auto space-y-2 mb-6">
-                            {orgs.length === 0 ? (
-                                <p className="text-text-muted text-center py-8">No organizations found for the selected criteria</p>
-                            ) : (
-                                orgs.map((org, i) => (
+                            {(() => {
+                                const filteredOrgs = orgs.filter(org => org.name.toLowerCase().includes(orgSearch.toLowerCase()));
+                                if (filteredOrgs.length === 0) {
+                                    if (orgSearch.trim() !== '') {
+                                        return (
+                                            <div className="text-center py-8">
+                                                <p className="text-text-muted mb-4">Organization '{orgSearch}' not found in the list.</p>
+                                                <button 
+                                                    onClick={() => handleFallbackOrgSearch(orgSearch)}
+                                                    className="btn-primary text-sm"
+                                                    disabled={loading}
+                                                >
+                                                    {loading ? 'Fetching...' : `Fetch '${orgSearch}' from GitHub`}
+                                                </button>
+                                            </div>
+                                        );
+                                    }
+                                    return <p className="text-text-muted text-center py-8">No organizations found for the selected criteria</p>;
+                                }
+                                return filteredOrgs.map((org, i) => (
                                     <button key={i} onClick={() => setSelectedOrg(org)}
                                         className={`w-full flex items-center justify-between p-4 rounded-lg border transition-all cursor-pointer ${selectedOrg?.name === org.name ? 'border-accent-cyan/50 bg-bg-panel' : 'border-border-default/30 hover:border-border-default'
                                             }`}
@@ -293,8 +365,8 @@ export default function ContributePage() {
                                         </div>
                                         <span className="text-text-muted text-sm truncate max-w-48">{org.description?.slice(0, 50) || ''}</span>
                                     </button>
-                                ))
-                            )}
+                                ));
+                            })()}
                         </div>
                         <div className="flex justify-end">
                             <button onClick={() => selectedOrg && handleOrgSelect(selectedOrg)} className="btn-primary text-sm" disabled={!selectedOrg}>

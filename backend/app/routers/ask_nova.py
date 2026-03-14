@@ -1,8 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 import app.schemas as schemas
+import models
+from database import get_db
+from sqlalchemy.orm import Session
+from app.utils.repo_analyzer import analyze_and_cache_repo, evaluate_local_commits
 import boto3
 import json
 import os
+import asyncio
 from typing import List
 
 routes = APIRouter(prefix="/nova", tags=["Bedrock AI Chat"])
@@ -27,7 +32,7 @@ def get_bedrock_client():
         return None
 
 @routes.post("/ask", response_model=schemas.AskNovaResponse)
-def ask_nova(request: schemas.AskNovaRequest):
+async def ask_nova(request: schemas.AskNovaRequest, db: Session = Depends(get_db)):
     """
     Given a repository context, a list of open issues, and chat history,
     requests Amazon Nova to help the user select an issue and understand how to tackle it.
@@ -35,6 +40,9 @@ def ask_nova(request: schemas.AskNovaRequest):
     client = get_bedrock_client()
     if not client:
         raise HTTPException(status_code=500, detail="Failed to initialize AWS Bedrock Client. Check AWS credentials.")
+        
+    if os.getenv("USE_NOVA", "True").lower() == "false":
+        return schemas.AskNovaResponse(reply="Amazon Nova AI features are currently disabled in the backend configuration.")
         
     # Format the issues for the system prompt
     issues_text = ""
@@ -44,12 +52,25 @@ def ask_nova(request: schemas.AskNovaRequest):
     if not issues_text:
         issues_text = "No open issues currently available."
         
+    # Get cached repo analysis context
+    repo_analysis = ""
+    cached = db.query(models.RepoAnalysis).filter(models.RepoAnalysis.repo_name == request.repo_name).first()
+    if cached:
+        repo_analysis = f"\n\n--- REPOSITORY CONTEXT ---\n{cached.system_prompt_context}\n"
+
+    # Evaluate local commits and testing if an issue is actively selected
+    local_evaluation = ""
+    if request.active_issue_number:
+        local_evaluation = await evaluate_local_commits(request.repo_name, request.active_issue_number)
+        
     # Construct System Prompt with Context
     system_prompt = (
         f"You are Vectr Nova, an expert open source contribution assistant.\n"
         f"The user is currently browsing the repository '{request.repo_name}'.\n\n"
         f"Here is the list of currently open issues in this repository:\n"
         f"{issues_text}\n"
+        f"{repo_analysis}"
+        f"{local_evaluation}"
         f"Your goals:\n"
         f"1. Help the user select the best issue for their skill level. If they ask for something easy, look for 'good first issue' or 'beginner' labels.\n"
         f"2. Once an issue is selected, briefly explain what it entails and suggest the first files they should check to get started.\n"
@@ -123,10 +144,38 @@ def ask_nova(request: schemas.AskNovaRequest):
 
 #Summarizer Route
 @routes.post("/summarize", response_model=schemas.SummarizeIssueResponse)
-def summarize_issue(request: schemas.SummarizeIssueRequest):
+async def summarize_issue(request: schemas.SummarizeIssueRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     client = get_bedrock_client()
     if not client:
         raise HTTPException(status_code=500, detail="Failed to initialize AWS Bedrock Client.")
+
+    repo_short_name = request.repo_name.split('/')[-1] if '/' in request.repo_name else request.repo_name
+    programmatic_commands = (
+        f"# 1. Clone the repository\n"
+        f"git clone https://github.com/{request.repo_name}.git\n"
+        f"cd {repo_short_name}\n\n"
+        f"# 2. Create a new branch for the issue\n"
+        f"git checkout -b fix/issue-{request.issue_number}"
+    )
+
+    if os.getenv("USE_NOVA", "True").lower() == "false":
+        return schemas.SummarizeIssueResponse(
+            summary=request.issue_body or "No issue description provided.",
+            approach="Please set USE_NOVA=True in the backend environment to enable AI-powered approach suggestions.",
+            commands=programmatic_commands
+        )
+
+    # Note: We must create a wrapper function for the background task to use its own database session DB thread safely, 
+    # but since this is synchronous SQLAlchemy and background tasks run after response, we'll dispatch it asynchronously using asyncio.create_task 
+    # Or just await it synchronously to guarantee context availability right away.
+    # Since clone + analysis might take 10s+, we'll still do it as an asyncio task but let the frontend wait? 
+    # Actually, we can use background_tasks with a fresh session generator, but let's just use the current db directly in run_in_executor if needed, 
+    # or just await it if we don't want complex thread management.
+    # We will await it synchronously to ensure the context is ready for the very first question.
+    try:
+        await analyze_and_cache_repo(request.repo_name, db, client)
+    except Exception as e:
+        print(f"Failed to analyze repo in summarize step: {str(e)}")
 
     # 1. Combine all the GitHub comments into a single block of text
     discussion = "\n".join(request.comments)
@@ -143,11 +192,10 @@ def summarize_issue(request: schemas.SummarizeIssueRequest):
     Discussion/Comments:
     {discussion}
     
-    Your task is to analyze this issue and output a RAW JSON object with NO markdown formatting, NO backticks, and NO conversational text. It MUST contain exactly these 3 keys:
+    Your task is to analyze this issue and output a RAW JSON object with NO markdown formatting, NO backticks, and NO conversational text. It MUST contain exactly these 2 keys:
     {{
         "summary": "A 2-3 sentence overview of what the bug/feature is.",
-        "approach": "A step-by-step logical explanation of how to fix this, noting what files to check.",
-        "commands": "Relevant git or terminal commands to clone the repo, install dependencies, and create a branch."
+        "approach": "A step-by-step logical explanation of how to fix this, noting what files to check."
     }}
     """
 
@@ -205,10 +253,57 @@ def summarize_issue(request: schemas.SummarizeIssueRequest):
         return schemas.SummarizeIssueResponse(
             summary=parsed_json.get("summary", "Summary not generated."),
             approach=parsed_json.get("approach", "Approach not generated."),
-            commands=parsed_json.get("commands", "Commands not generated.")
+            commands=programmatic_commands
         )
 
     except json.JSONDecodeError:
          raise HTTPException(status_code=500, detail="Nova failed to format the response as JSON.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Bedrock invocation error: {str(e)}")
+
+# Commits Route
+@routes.post("/commits", response_model=schemas.FetchCommitsResponse)
+async def fetch_commits(request: schemas.FetchCommitsRequest):
+    """
+    Checks the local workspace for the issue branch and returns the commit log messages.
+    """
+    from app.utils.repo_analyzer import WORKSPACES_DIR, run_cmd_async
+    
+    repo_dir = os.path.join(WORKSPACES_DIR, request.repo_name.replace("/", "_"))
+    if not os.path.exists(repo_dir):
+        return schemas.FetchCommitsResponse(commits=[])
+        
+    branch_name = f"fix/issue-{request.active_issue_number}"
+    
+    # 1. Pull latest from remote
+    await run_cmd_async(f"git fetch origin", cwd=repo_dir)
+    
+    # Check if branch exists locally
+    code, out, err = await run_cmd_async(f"git branch --list {branch_name}", cwd=repo_dir)
+    if not out.strip():
+        # Try to checkout the remote branch if it exists, otherwise it might not exist at all yet
+        chk_code, chk_out, chk_err = await run_cmd_async(f"git checkout -b {branch_name} origin/{branch_name}", cwd=repo_dir)
+        if chk_code != 0:
+             # Branch doesn't exist on remote either
+             return schemas.FetchCommitsResponse(commits=[])
+    else:
+        # Branch exists locally, pull latest
+        await run_cmd_async(f"git checkout {branch_name}", cwd=repo_dir)
+        await run_cmd_async(f"git pull origin {branch_name}", cwd=repo_dir)
+         
+    # 2. Find default branch
+    code, def_branch_out, err = await run_cmd_async("git symbolic-ref refs/remotes/origin/HEAD", cwd=repo_dir)
+    if code != 0:
+         default_branch = "main" # Fallback
+    else:
+         default_branch = def_branch_out.strip().split('/')[-1]
+
+    # 3. Get commit messages between default branch and issue branch
+    code, log_out, err = await run_cmd_async(f"git log {default_branch}..{branch_name} --oneline", cwd=repo_dir)
+    
+    commits = []
+    if log_out.strip():
+        # git log returns newest first, split by newline
+        commits = [line.strip() for line in log_out.strip().split('\n') if line.strip()]
+        
+    return schemas.FetchCommitsResponse(commits=commits)

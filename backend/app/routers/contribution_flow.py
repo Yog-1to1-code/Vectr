@@ -26,10 +26,10 @@ def start_contribution(
         
     exp_level = user.experience_lvl.lower()
     
-    # BEGINNER FLOW: Prompt for Language Selection first (unless they already provided one)
-    if exp_level == "beginner" and not language and not search_query:
+    # Prompt for Language Selection first (unless they already provided one or are searching)
+    if not language and not search_query:
         # Return a list of supported or popular languages for them to choose from
-        supported_languages = ["Python", "JavaScript", "TypeScript", "Java", "C++", "Go", "Rust", "HTML/CSS"]
+        supported_languages = ["Python", "JavaScript", "TypeScript", "Java", "C++", "C#", "Go", "Rust", "HTML/CSS", "Ruby", "Swift", "Kotlin", "PHP", "Dart", "Scala", "Shell", "Objective-C", "R", "Lua", "Perl", "Haskell", "Elixir", "Clojure", "Groovy", "MATLAB", "Assembly", "Vue", "React", "Svelte", "Angular", "SQL", "NoSQL", "Solidity", "WebAssembly"]
         return schemas.StartContributionResponse(
             next_step="SELECT_LANGUAGE",
             languages=supported_languages
@@ -77,7 +77,7 @@ def start_contribution(
                 "q": f"language:{search_language}",
                 "sort": "stars",
                 "order": "desc",
-                "per_page": 20
+                "per_page": 100
             }
             res = rq.get(search_url, headers=headers, params=params)
             res.raise_for_status()
@@ -97,7 +97,7 @@ def start_contribution(
                             language=language
                         )
                     )
-                    if len(organizations) >= 10:
+                    if len(organizations) >= 100:
                          break
         else:
             # DEFAULT: Return Popular Orgs

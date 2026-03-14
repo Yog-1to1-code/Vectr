@@ -107,7 +107,7 @@ def get_repo_issues(
                     title=issue["title"],
                     state=issue["state"],
                     html_url=issue["html_url"],
-                    body=issue.get("body", "")[:500], # Trucate body to save bandwidth/prompt space
+                    body=issue.get("body", ""), # Pass full body for fallback markdown render
                     labels=labels
                 )
             )

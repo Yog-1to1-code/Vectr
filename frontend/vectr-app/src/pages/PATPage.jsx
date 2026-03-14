@@ -112,7 +112,7 @@ export default function PATPage() {
 
                 <div className="flex items-center justify-between">
                     <button onClick={() => navigate(ROUTES.LOGIN)} className="btn-secondary text-sm" disabled={loading}>Back</button>
-                    <button onClick={handleSubmit} disabled={loading} className="btn-primary" id="pat-submit-btn">
+                    <button onClick={handleSubmit} disabled={loading || !pat.trim()} className={`btn-primary ${!pat.trim() ? 'opacity-50 cursor-not-allowed' : ''}`} id="pat-submit-btn">
                         {loading ? <><span className="spinner"></span> Validating...</> : 'Done'}
                     </button>
                 </div>

@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { novaAPI } from '../services/api';
@@ -25,6 +27,7 @@ export default function IssueDashboardPage() {
     const [gitCommands, setGitCommands] = useState('');
     const [summarizing, setSummarizing] = useState(true);
     const [summaryError, setSummaryError] = useState('');
+    const [refreshingCommits, setRefreshingCommits] = useState(false);
 
     // Auto-summarize via Amazon Nova on mount
     useEffect(() => {
@@ -32,6 +35,20 @@ export default function IssueDashboardPage() {
         const fetchSummary = async () => {
             setSummarizing(true);
             setSummaryError('');
+            
+            const isNovaEnabled = import.meta.env.VITE_USE_NOVA !== 'false';
+            if (!isNovaEnabled) {
+                if (!cancelled) {
+                    setIssueSummary(issue.body || "No issue description provided.");
+                    setFinalApproach("Amazon Nova AI features are currently disabled. Set VITE_USE_NOVA=true to enable AI-powered approach suggestions.");
+                    setGitCommands(
+                        `# Fork and clone\ngit clone https://github.com/${repoName}.git\ncd ${repo}\n\n# Create a feature branch\ngit checkout -b fix/issue-${issueNumber}\n\n# After making changes\ngit add .\ngit commit -m "Fix #${issueNumber}: ${issue.title || ''}"\ngit push origin fix/issue-${issueNumber}`
+                    );
+                    setSummarizing(false);
+                }
+                return;
+            }
+
             try {
                 const data = await novaAPI.summarize(
                     repoName,
@@ -75,6 +92,19 @@ export default function IssueDashboardPage() {
             .finally(() => setSummarizing(false));
     };
 
+    const handleRefreshCommits = async () => {
+        setRefreshingCommits(true);
+        try {
+            const data = await novaAPI.fetchCommits(repoName, issueNumber);
+            setCommits(data.commits || []);
+            showToast('Commits refreshed successfully', 'success');
+        } catch (err) {
+            showToast(err.message || 'Failed to fetch commits', 'error');
+        } finally {
+            setRefreshingCommits(false);
+        }
+    };
+
     const condensedIssues = allIssues.map(i => ({
         number: i.number, title: i.title, state: i.state, labels: i.labels || []
     }));
@@ -103,9 +133,11 @@ export default function IssueDashboardPage() {
                         onClick={() => navigate(buildDraftPRPath(org, repo, issueNumber), {
                             state: { issue, repoName, issues: allIssues, issueSummary, finalApproach, testResults }
                         })}
-                        className="btn-primary text-sm"
-                        style={{ animation: 'pulse-glow 2s infinite' }}
+                        className={`btn-primary text-sm ${commits.length === 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                        style={commits.length > 0 ? { animation: 'pulse-glow 2s infinite' } : {}}
                         id="draft-pr-btn"
+                        disabled={commits.length === 0}
+                        title={commits.length === 0 ? "You need at least one commit to draft a PR" : "Draft a Pull Request"}
                     >
                         Draft PR
                     </button>
@@ -113,24 +145,48 @@ export default function IssueDashboardPage() {
             </header>
 
             {/* Content Grid */}
-            <div className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6" style={{ height: 'calc(100vh - 73px)' }}>
+            <div className="p-4 grid grid-cols-1 lg:grid-cols-[2.5fr_5.7fr_3.8fr] gap-4" style={{ height: 'calc(100vh - 73px)' }}>
                 {/* Left Column */}
-                <div className="lg:col-span-3 space-y-6 overflow-y-auto">
-                    <div className="glass-card p-4">
+                <div className="space-y-4 overflow-y-auto">
+                    <div className="glass-card p-3">
                         <div className="flex items-center justify-between mb-3">
-                            <h3 className="text-sm font-semibold text-text-primary">Commits</h3>
+                            <div className="flex items-center gap-2">
+                                <h3 className="text-sm font-semibold text-text-primary m-0 leading-none">Commits</h3>
+                                <button 
+                                    onClick={handleRefreshCommits}
+                                    disabled={refreshingCommits}
+                                    className="text-text-muted hover:text-accent-cyan transition-colors disabled:opacity-50"
+                                    aria-label="Refresh commits"
+                                    title="Refresh commits"
+                                >
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+                                         className={refreshingCommits ? "animate-spin" : ""}>
+                                        <path d="M21.5 2v6h-6M2.13 15.57a9 9 0 1 0 3.87-11.4l-4.14 1.34"/>
+                                    </svg>
+                                </button>
+                            </div>
                             <span className="text-text-muted text-xs">{commits.length}</span>
                         </div>
                         <div className="space-y-2">
                             {commits.length === 0 ? (
-                                <p className="text-text-muted text-xs text-center py-6">No commits yet. Start working on this issue!</p>
+                                <div className="text-center py-6 space-y-2">
+                                    <p className="text-text-muted text-xs">No commits yet.</p>
+                                    <a 
+                                        href={`https://vscode.dev/github/${repoName}`} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer"
+                                        className="text-accent-cyan hover:text-accent-green text-xs underline transition-colors inline-block"
+                                    >
+                                        Open in vscode.dev
+                                    </a>
+                                </div>
                             ) : (
                                 commits.map((c, i) => <div key={i} className="p-2 text-xs text-text-secondary bg-bg-panel rounded">{c}</div>)
                             )}
                         </div>
                     </div>
 
-                    <div className="glass-card p-4">
+                    <div className="glass-card p-3">
                         <h3 className="text-sm font-semibold text-text-primary mb-3">Git Helper Commands</h3>
                         {summarizing ? (
                             <div className="space-y-2">
@@ -144,7 +200,7 @@ export default function IssueDashboardPage() {
                         )}
                     </div>
 
-                    <div className="glass-card p-4">
+                    <div className="glass-card p-3">
                         <h3 className="text-sm font-semibold" style={{ color: '#f87171' }}>Test Results</h3>
                         <div className="mt-2">
                             {testResults ? (
@@ -157,8 +213,8 @@ export default function IssueDashboardPage() {
                 </div>
 
                 {/* Center Column */}
-                <div className="lg:col-span-5 space-y-6 overflow-y-auto">
-                    <div className="glass-card-accent p-5">
+                <div className="space-y-4 overflow-y-auto">
+                    <div className="glass-card-accent p-4">
                         <div className="flex items-center justify-between mb-3">
                             <h3 className="text-sm font-semibold text-text-primary">Issue Summary</h3>
                             <div className="flex items-center gap-2">
@@ -181,7 +237,9 @@ export default function IssueDashboardPage() {
                                 <div className="skeleton-shimmer h-4 w-2/3"></div>
                             </div>
                         ) : (
-                            <div className="text-sm text-text-secondary leading-relaxed whitespace-pre-wrap">{issueSummary}</div>
+                            <div className="text-sm leading-relaxed max-w-none text-text-secondary markdown-body">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{issueSummary}</ReactMarkdown>
+                            </div>
                         )}
                         {summaryError && !summarizing && (
                             <div className="mt-3 flex items-center justify-between p-2 rounded-lg text-xs" style={{
@@ -193,7 +251,7 @@ export default function IssueDashboardPage() {
                         )}
                     </div>
 
-                    <div className="glass-card p-5">
+                    <div className="glass-card p-4">
                         <h3 className="text-sm font-semibold text-text-primary mb-3">Final Approach</h3>
                         <div className="text-sm text-text-secondary leading-relaxed">
                             {summarizing ? (
@@ -204,7 +262,9 @@ export default function IssueDashboardPage() {
                                     <div className="skeleton-shimmer h-4 w-3/4"></div>
                                 </div>
                             ) : finalApproach ? (
-                                <div className="whitespace-pre-wrap">{finalApproach}</div>
+                                <div className="max-w-none markdown-body">
+                                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{finalApproach}</ReactMarkdown>
+                                </div>
                             ) : (
                                 <div className="text-center py-10 text-text-muted">
                                     <div className="text-3xl mb-3">💡</div>
@@ -217,8 +277,8 @@ export default function IssueDashboardPage() {
                 </div>
 
                 {/* Right Column — Ask Nova */}
-                <div className="lg:col-span-4">
-                    <NovaChat repoName={repoName} issuesContext={condensedIssues} />
+                <div className="min-h-0 h-full">
+                    <NovaChat repoName={repoName} issuesContext={condensedIssues} activeIssueNumber={issueNumber} />
                 </div>
             </div>
         </>

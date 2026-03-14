@@ -28,3 +28,10 @@ class Contributions(Base):
     user_email = Column(String, ForeignKey("UserInfo.email"))
     status = Column(String)
 
+class RepoAnalysis(Base):
+    __tablename__ = "RepoAnalysis"
+    id = Column(Integer, primary_key=True, index=True)
+    repo_name = Column(String, unique=True, nullable=False)
+    system_prompt_context = Column(String, nullable=False)
+
+

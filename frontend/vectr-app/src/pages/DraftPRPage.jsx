@@ -94,7 +94,7 @@ export default function DraftPRPage() {
             )}
 
             {/* Content Grid */}
-            <div className="p-6 grid grid-cols-1 lg:grid-cols-12 gap-6" style={{ height: 'calc(100vh - 73px)' }}>
+            <div className="p-4 grid grid-cols-1 lg:grid-cols-12 gap-4" style={{ height: 'calc(100vh - 73px)' }}>
                 {/* Left Column */}
                 <div className="lg:col-span-3 space-y-6 overflow-y-auto">
                     <div className="glass-card p-4">
@@ -130,7 +130,7 @@ export default function DraftPRPage() {
 
                 {/* Center Column — PR Editor */}
                 <div className="lg:col-span-5 overflow-y-auto">
-                    <div className="glass-card p-5 h-full">
+                    <div className="glass-card p-4 h-full">
                         <h3 className="text-sm font-semibold text-text-primary mb-4">Pull Request</h3>
                         <div className="space-y-4">
                             <div>

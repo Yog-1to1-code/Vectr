@@ -76,11 +76,11 @@ export default function DashboardPage() {
             )}
 
             {/* Dashboard Grid */}
-            <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="p-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
                 {/* Left Column — My Contributions */}
                 <div className="lg:col-span-2">
                     {loading ? <CardSkeleton rows={3} /> : (
-                        <div className="glass-card p-5 h-full">
+                        <div className="glass-card p-4 h-full">
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-lg font-semibold text-text-primary">My Contributions</h2>
                                 <span className="text-text-muted text-xs">{contributions.length} total</span>
@@ -116,7 +116,7 @@ export default function DashboardPage() {
                 <div className="space-y-6">
                     {/* Working Issues */}
                     {loading ? <CardSkeleton rows={2} /> : (
-                        <div className="glass-card p-5">
+                        <div className="glass-card p-4">
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-lg font-semibold text-text-primary">Working Issues</h2>
                                 <span className="text-text-muted text-xs">{workingIssues.length}</span>
@@ -143,14 +143,14 @@ export default function DashboardPage() {
                     )}
 
                     {/* Commit Map */}
-                    <div className="glass-card p-5">
+                    <div className="glass-card p-4">
                         <h2 className="text-lg font-semibold text-text-primary mb-4">Commit Map</h2>
                         <CommitMap data={commitData} />
                     </div>
 
                     {/* Pull Requests */}
                     {loading ? <CardSkeleton rows={2} /> : (
-                        <div className="glass-card p-5">
+                        <div className="glass-card p-4">
                             <div className="flex items-center justify-between mb-4">
                                 <h2 className="text-lg font-semibold text-text-primary">Pull Requests</h2>
                                 <span className="text-text-muted text-xs">{pullRequests.length}</span>

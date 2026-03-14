@@ -127,6 +127,7 @@ class CondensedIssue(BaseModel):
 
 class AskNovaRequest(BaseModel):
     repo_name: str
+    active_issue_number: Optional[int] = None
     issues_context: List[CondensedIssue] # Provide the list of currently open issues here
     messages: List[ChatMessage] # Conversation history
 
@@ -143,4 +144,11 @@ class SummarizeIssueRequest(BaseModel):
 class SummarizeIssueResponse(BaseModel):
     summary: str
     approach: str
-    commands: str
+    commands: str
+
+class FetchCommitsRequest(BaseModel):
+    repo_name: str
+    active_issue_number: int
+
+class FetchCommitsResponse(BaseModel):
+    commits: List[str]

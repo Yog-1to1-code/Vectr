@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { novaAPI } from '../services/api';
 
 /**
  * Ask Nova AI chat panel. Integrates with Amazon Bedrock via the backend.
  * Can be used standalone on any page—just pass repo context and issues.
  */
-export default function NovaChat({ repoName = '', issuesContext = [] }) {
+export default function NovaChat({ repoName = '', issuesContext = [], activeIssueNumber = null }) {
     const [messages, setMessages] = useState([]);
     const [input, setInput] = useState('');
     const [loading, setLoading] = useState(false);
@@ -14,6 +16,21 @@ export default function NovaChat({ repoName = '', issuesContext = [] }) {
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, [messages]);
+
+    const isNovaEnabled = import.meta.env.VITE_USE_NOVA !== 'false';
+
+    if (!isNovaEnabled) {
+        return (
+            <div className="nova-card flex flex-col h-full overflow-hidden items-center justify-center p-6 text-center">
+                <div className="text-4xl mb-4">🤖</div>
+                <h3 className="text-lg font-semibold text-text-primary mb-2">Amazon Nova is Disabled</h3>
+                <p className="text-text-muted text-sm max-w-xs">
+                    AI functionality is currently turned off in your environment variables. 
+                    Search and summarize features rely on Nova. Set VITE_USE_NOVA=true to enable.
+                </p>
+            </div>
+        );
+    }
 
     const sendMessage = async () => {
         const trimmed = input.trim();
@@ -26,7 +43,7 @@ export default function NovaChat({ repoName = '', issuesContext = [] }) {
         setLoading(true);
 
         try {
-            const res = await novaAPI.ask(repoName, issuesContext, newMessages);
+            const res = await novaAPI.ask(repoName, issuesContext, newMessages, activeIssueNumber);
             setMessages(prev => [...prev, { role: 'assistant', content: res.reply }]);
         } catch (err) {
             setMessages(prev => [...prev, {
@@ -97,7 +114,13 @@ export default function NovaChat({ repoName = '', issuesContext = [] }) {
                             }`}
                         style={msg.role === 'assistant' ? { background: 'rgba(19,29,47,0.8)' } : {}}
                     >
-                        {msg.content}
+                        {msg.role === 'assistant' ? (
+                            <div className="markdown-body">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                            </div>
+                        ) : (
+                            msg.content
+                        )}
                     </div>
                 ))}
                 {loading && (
