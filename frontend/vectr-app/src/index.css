@@ -38,19 +38,33 @@
   }
 
   ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 4px;
+    height: 4px;
   }
   ::-webkit-scrollbar-track {
-    background: var(--color-bg-primary);
+    background: transparent;
   }
   ::-webkit-scrollbar-thumb {
     background: var(--color-border-default);
-    border-radius: 3px;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-accent-blue);
   }
 }
 
 @layer components {
+  /* ─── Per-block scroll container ─────────────────────────────── */
+  .block-scroll {
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border-default) transparent;
+    max-height: 38dvh;
+  }
+  .block-scroll:hover {
+    scrollbar-color: var(--color-accent-blue) transparent;
+  }
+
   .glass-card {
     background: linear-gradient(135deg, rgba(15, 23, 41, 0.9), rgba(19, 29, 47, 0.8));
     border: 1px solid var(--color-border-default);

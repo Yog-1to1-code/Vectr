@@ -7,7 +7,7 @@ import { novaAPI } from '../services/api';
  * Ask Nova AI chat panel. Integrates with Amazon Bedrock via the backend.
  * Can be used standalone on any page—just pass repo context and issues.
  */
-export default function NovaChat({ repoName = '', issuesContext = [], activeIssueNumber = null, externalMessages, setExternalMessages }) {
+export default function NovaChat({ repoName = '', issuesContext = [], activeIssueNumber = null, externalMessages, setExternalMessages, userEmail = null, onApproachUpdate = null }) {
     // If externalMessages is provided, act as a controlled component, else use internal state.
     const [internalMessages, setInternalMessages] = useState([]);
     const messages = externalMessages !== undefined ? externalMessages : internalMessages;
@@ -47,8 +47,11 @@ export default function NovaChat({ repoName = '', issuesContext = [], activeIssu
         setLoading(true);
 
         try {
-            const res = await novaAPI.ask(repoName, issuesContext, newMessages, activeIssueNumber);
+            const res = await novaAPI.ask(repoName, issuesContext, newMessages, activeIssueNumber, userEmail);
             setMessages(prev => [...prev, { role: 'assistant', content: res.reply }]);
+            if (res.updated_approach && onApproachUpdate) {
+                onApproachUpdate(res.updated_approach);
+            }
         } catch (err) {
             setMessages(prev => [...prev, {
                 role: 'assistant',

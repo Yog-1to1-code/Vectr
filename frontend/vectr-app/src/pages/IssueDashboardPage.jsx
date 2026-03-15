@@ -23,13 +23,25 @@ export default function IssueDashboardPage() {
     const [issueSummary, setIssueSummary] = useState('');
     const [finalApproach, setFinalApproach] = useState('');
     const [commits, setCommits] = useState([]);
+    const [forkDetected, setForkDetected] = useState(false);
+    const [forkVscodeUrl, setForkVscodeUrl] = useState(null);
     const [testResults, setTestResults] = useState('');
-    const [gitCommands, setGitCommands] = useState('');
     const [summarizing, setSummarizing] = useState(true);
     const [summaryError, setSummaryError] = useState('');
     const [refreshingCommits, setRefreshingCommits] = useState(false);
     const [chatMessages, setChatMessages] = useState([]);
     const [isSaving, setIsSaving] = useState(false);
+
+    // Git commands are always generated locally — no Nova credits needed
+    const gitCommands = (
+        `## Git Commands in vscode.dev\n\n` +
+        `> After opening your fork in vscode.dev, open the terminal with \`Ctrl+J\`.\n\n` +
+        `### 1. Create a Feature Branch\n\`\`\`\ngit checkout -b fix/issue-${issueNumber}\n\`\`\`\n\n` +
+        `### 2. Make Your Changes\nEdit the relevant files, then:\n\n` +
+        `### 3. Stage & Commit\n\`\`\`\ngit add .\ngit commit -m "Fix #${issueNumber}: <brief description>"\n\`\`\`\n\n` +
+        `### 4. Push to Your Fork\n\`\`\`\ngit push origin fix/issue-${issueNumber}\n\`\`\`\n\n` +
+        `### 5. Evaluate with Nova\nHit **Refresh** on the Commits panel, then use **Ask Nova!** to get AI-powered feedback on your changes.`
+    );
 
     // Auto-summarize via Amazon Nova on mount
     useEffect(() => {
@@ -44,8 +56,12 @@ export default function IssueDashboardPage() {
                 if (!cancelled && saved && (saved.issue_summary || saved.chat_history !== '[]')) {
                     setIssueSummary(saved.issue_summary || '');
                     setFinalApproach(saved.final_approach || '');
-                    setGitCommands(saved.git_commands || '');
                     setTestResults(saved.test_results || '');
+                    // Restore fork status from saved progress
+                    if (saved.fork_status === 'available') {
+                        setForkDetected(true);
+                        setForkVscodeUrl(saved.fork_vscode_url || null);
+                    }
                     try {
                         const parsedHistory = JSON.parse(saved.chat_history || '[]');
                         setChatMessages(prev => [...prev, ...parsedHistory]);
@@ -76,21 +92,19 @@ export default function IssueDashboardPage() {
                     parseInt(issueNumber),
                     issue.title || `Issue #${issueNumber}`,
                     issue.body || '',
-                    []
+                    [],
+                    user?.email
                 );
                 if (!cancelled) {
                     setIssueSummary(data.summary || '');
                     setFinalApproach(data.approach || '');
-                    setGitCommands(data.commands || '');
+                    // git commands are generated locally — never from Nova
                 }
             } catch (err) {
                 if (!cancelled) {
-                    // Fallback to static content if Nova fails
                     setSummaryError(err.message || 'Nova could not summarize this issue');
                     setIssueSummary(issue.body || `Issue #${issueNumber}: ${issue.title || 'No title'}\n\nUse the "Ask Nova!" panel to get an AI-generated summary.`);
-                    setGitCommands(
-                        `# Fork and clone\ngit clone https://github.com/${repoName}.git\ncd ${repo}\n\n# Create a feature branch\ngit checkout -b fix/issue-${issueNumber}\n\n# After making changes\ngit add .\ngit commit -m "Fix #${issueNumber}: ${issue.title || ''}"\ngit push origin fix/issue-${issueNumber}`
-                    );
+                    // git commands remain as the locally-generated template above
                 }
             } finally {
                 if (!cancelled) setSummarizing(false);
@@ -147,7 +161,7 @@ export default function IssueDashboardPage() {
     const retrySummarize = () => {
         setSummarizing(true);
         setSummaryError('');
-        novaAPI.summarize(repoName, parseInt(issueNumber), issue.title || '', issue.body || '', [])
+        novaAPI.summarize(repoName, parseInt(issueNumber), issue.title || '', issue.body || '', [], user?.email)
             .then(data => {
                 setIssueSummary(data.summary || '');
                 setFinalApproach(data.approach || '');
@@ -160,11 +174,17 @@ export default function IssueDashboardPage() {
     const handleRefreshCommits = async () => {
         setRefreshingCommits(true);
         try {
-            const data = await novaAPI.fetchCommits(repoName, issueNumber);
+            const data = await novaAPI.fetchCommits(repoName, issueNumber, user?.email);
             setCommits(data.commits || []);
-            showToast('Commits refreshed successfully', 'success');
+            setForkDetected(data.fork_detected ?? false);
+            setForkVscodeUrl(data.fork_vscode_url ?? null);
+            if (data.fork_detected) {
+                showToast('Fork detected! Pulled latest commits.', 'success');
+            } else {
+                showToast('Fork not found yet — please fork the repo first.', 'info');
+            }
         } catch (err) {
-            showToast(err.message || 'Failed to fetch commits', 'error');
+            showToast(err.message || 'Failed to fetch commits from your fork', 'error');
         } finally {
             setRefreshingCommits(false);
         }
@@ -226,8 +246,8 @@ export default function IssueDashboardPage() {
 
             {/* Content Grid */}
             <div className="p-4 grid grid-cols-1 lg:grid-cols-[2.5fr_5.7fr_3.8fr] gap-4" style={{ height: 'calc(100vh - 73px)' }}>
-                {/* Left Column */}
-                <div className="space-y-4 overflow-y-auto">
+                {/* Left Column — no column-level scroll; each card scrolls itself */}
+                <div className="space-y-4 flex flex-col">
                     <div className="glass-card p-3">
                         <div className="flex items-center justify-between mb-3">
                             <div className="flex items-center gap-2">
@@ -247,18 +267,60 @@ export default function IssueDashboardPage() {
                             </div>
                             <span className="text-text-muted text-xs">{commits.length}</span>
                         </div>
-                        <div className="space-y-2">
+                        {/* Pinned vscode.dev link when fork is available — always at top */}
+                        {forkDetected && forkVscodeUrl && (
+                            <a
+                                href={forkVscodeUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-xs font-medium transition-all mb-2"
+                                style={{ background: 'rgba(6,182,212,0.15)', border: '1px solid rgba(6,182,212,0.3)', color: '#22d3ee' }}
+                            >
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}>
+                                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                                    <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                                </svg>
+                                Open fork in vscode.dev ✓
+                            </a>
+                        )}
+
+                        {/* Scrollable commits content */}
+                        <div className="block-scroll space-y-2">
                             {commits.length === 0 ? (
-                                <div className="text-center py-6 space-y-2">
-                                    <p className="text-text-muted text-xs">No commits yet.</p>
-                                    <a 
-                                        href={`https://vscode.dev/github/${repoName}`} 
-                                        target="_blank" 
+                                <div className="py-4 space-y-3">
+                                    {/* Fork link — always shown */}
+                                    <a
+                                        href={`https://github.com/${repoName}/fork`}
+                                        target="_blank"
                                         rel="noopener noreferrer"
-                                        className="text-accent-cyan hover:text-accent-green text-xs underline transition-colors inline-block"
+                                        className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-xs font-medium transition-all"
+                                        style={{ background: 'rgba(139,92,246,0.15)', border: '1px solid rgba(139,92,246,0.3)', color: '#a78bfa' }}
                                     >
-                                        Open in vscode.dev
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}>
+                                            <circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/>
+                                            <path d="M18 9v1a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2V9"/><path d="M12 12v3"/>
+                                        </svg>
+                                        Fork this repo on GitHub
                                     </a>
+
+                                    {/* Disabled vscode.dev placeholder only if fork NOT yet detected */}
+                                    {!forkDetected && (
+                                        <div
+                                            className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-xs font-medium opacity-40 cursor-not-allowed select-none"
+                                            style={{ background: 'rgba(6,182,212,0.05)', border: '1px dashed rgba(6,182,212,0.2)', color: '#22d3ee' }}
+                                            title="Fork the repo first to unlock this"
+                                        >
+                                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{flexShrink:0}}>
+                                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                                                <polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                                            </svg>
+                                            Open fork in vscode.dev
+                                        </div>
+                                    )}
+
+                                    <p className="text-text-muted text-xs text-center pt-1 opacity-60">
+                                        Refresh after forking to detect your fork →
+                                    </p>
                                 </div>
                             ) : (
                                 commits.map((c, i) => <div key={i} className="p-2 text-xs text-text-secondary bg-bg-panel rounded">{c}</div>)
@@ -276,7 +338,31 @@ export default function IssueDashboardPage() {
                                 <div className="skeleton-shimmer h-4 w-2/3"></div>
                             </div>
                         ) : (
-                            <pre className="text-xs text-text-muted whitespace-pre-wrap bg-bg-input rounded-lg p-3 overflow-x-auto select-all">{gitCommands}</pre>
+                            <div className="block-scroll prose prose-invert prose-sm max-w-none text-xs text-text-muted">
+                                <ReactMarkdown
+                                    remarkPlugins={[remarkGfm]}
+                                    components={{
+                                        a: ({ href, children }) => (
+                                            <a href={href} target="_blank" rel="noopener noreferrer"
+                                               className="text-accent-cyan hover:text-accent-green underline transition-colors">
+                                                {children}
+                                            </a>
+                                        ),
+                                        code: ({ inline, children }) => inline ? (
+                                            <code className="bg-bg-input px-1 rounded text-accent-green font-mono">{children}</code>
+                                        ) : (
+                                            <pre className="bg-bg-input rounded-lg p-3 overflow-x-auto select-all whitespace-pre-wrap my-2 text-text-muted">
+                                                <code className="font-mono">{children}</code>
+                                            </pre>
+                                        ),
+                                        h3: ({ children }) => <h3 className="text-text-primary font-semibold mt-3 mb-1 text-xs">{children}</h3>,
+                                        h2: ({ children }) => <h2 className="text-text-primary font-bold mt-2 mb-2 text-sm">{children}</h2>,
+                                        blockquote: ({ children }) => (
+                                            <blockquote className="border-l-2 border-accent-cyan pl-2 text-text-muted italic">{children}</blockquote>
+                                        ),
+                                    }}
+                                >{gitCommands}</ReactMarkdown>
+                            </div>
                         )}
                     </div>
 
@@ -284,7 +370,7 @@ export default function IssueDashboardPage() {
                         <h3 className="text-sm font-semibold" style={{ color: '#f87171' }}>Test Results</h3>
                         <div className="mt-2">
                             {testResults ? (
-                                <pre className="text-xs text-text-muted whitespace-pre-wrap bg-bg-input rounded-lg p-3">{testResults}</pre>
+                                <pre className="block-scroll text-xs text-text-muted whitespace-pre-wrap bg-bg-input rounded-lg p-3">{testResults}</pre>
                             ) : (
                                 <p className="text-text-muted text-xs text-center py-6">No test results yet</p>
                             )}
@@ -293,7 +379,7 @@ export default function IssueDashboardPage() {
                 </div>
 
                 {/* Center Column */}
-                <div className="space-y-4 overflow-y-auto">
+                <div className="space-y-4 flex flex-col">
                     <div className="glass-card-accent p-4">
                         <div className="flex items-center justify-between mb-3">
                             <h3 className="text-sm font-semibold text-text-primary">Issue Summary</h3>
@@ -317,7 +403,7 @@ export default function IssueDashboardPage() {
                                 <div className="skeleton-shimmer h-4 w-2/3"></div>
                             </div>
                         ) : (
-                            <div className="text-sm leading-relaxed max-w-none text-text-secondary markdown-body">
+                            <div className="block-scroll text-sm leading-relaxed max-w-none text-text-secondary markdown-body">
                                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{issueSummary}</ReactMarkdown>
                             </div>
                         )}
@@ -342,7 +428,7 @@ export default function IssueDashboardPage() {
                                     <div className="skeleton-shimmer h-4 w-3/4"></div>
                                 </div>
                             ) : finalApproach ? (
-                                <div className="max-w-none markdown-body">
+                                <div className="block-scroll max-w-none markdown-body">
                                     <ReactMarkdown remarkPlugins={[remarkGfm]}>{finalApproach}</ReactMarkdown>
                                 </div>
                             ) : (
@@ -364,6 +450,8 @@ export default function IssueDashboardPage() {
                         activeIssueNumber={issueNumber}
                         externalMessages={chatMessages}
                         setExternalMessages={setChatMessages}
+                        userEmail={user?.email}
+                        onApproachUpdate={(newApproach) => setFinalApproach(newApproach)}
                     />
                 </div>
             </div>
