@@ -11,8 +11,8 @@ async def run_cmd_async(cmd: str, cwd: str = None):
     process = await asyncio.create_subprocess_shell(
         cmd,
         cwd=cwd,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
     stdout, stderr = await process.communicate()
     return process.returncode, stdout.decode(errors="ignore"), stderr.decode(errors="ignore")
@@ -106,6 +106,55 @@ async def _invoke_nova_for_analysis(client, repo_name: str, tree: str, readme: s
         print(f"Error invoking Nova for static analysis: {e}")
         return "Could not generate deep structural analysis at this time."
 
+async def _invoke_nova_for_diff_summary(client, diff_str: str) -> str:
+    """Uses Bedrock Nova to generate a short 1-2 sentence summary of a git diff."""
+    if not diff_str.strip():
+        return "No significant code changes found."
+        
+    try:
+        system_prompt = (
+            "You are an expert code reviewer.\n"
+            "Formulate a highly concise, 1-2 sentence technical summary of the git diff provided.\n"
+            "Focus purely on what the code changes actually accomplish without conversational filler."
+        )
+        user_msg = f"GIT DIFF:\n```diff\n{diff_str}\n```\n\nPlease summarize these code changes."
+        
+        endpoint_url = os.getenv("AWS_ENDPOINT_URL")
+        if endpoint_url and ("localhost" in endpoint_url or "127.0.0.1" in endpoint_url):
+            import requests as req
+            ollama_url = "http://127.0.0.1:11434/api/chat"
+            payload = {
+                "model": "amazon.nova-2-lite:v1.0",
+                "messages": [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_msg}
+                ],
+                "stream": False,
+            }
+            res = req.post(ollama_url, json=payload)
+            res.raise_for_status()
+            return res.json().get('message', {}).get('content', "Failed to generate diff summary.")
+        else:
+            if not client:
+                 return "Failed to initialize Bedrock client."
+            body = {
+                "system": [{"text": system_prompt}],
+                "messages": [{"role": "user", "content": [{"text": user_msg}]}],
+                "inferenceConfig": {"maxTokens": 300, "temperature": 0.2}
+            }
+            response = client.invoke_model(
+                modelId=os.getenv("NOVA_MODEL_ID", "amazon.nova-lite-v1:0"),
+                body=json.dumps(body),
+                accept="application/json",
+                contentType="application/json"
+            )
+            response_body = json.loads(response.get('body').read())
+            return response_body.get('output', {}).get('message', {}).get('content', [{}])[0].get('text', "").strip()
+            
+    except Exception as e:
+        print(f"Error invoking Nova for diff summary: {e}")
+        return "Could not summarize the recent commit diff."
+
 async def analyze_and_cache_repo(repo_name: str, db: Session, bedrock_client) -> str:
     """Returns the cached analysis, or generates and stores one."""
     cached = db.query(models.RepoAnalysis).filter(models.RepoAnalysis.repo_name == repo_name).first()
@@ -129,19 +178,51 @@ async def analyze_and_cache_repo(repo_name: str, db: Session, bedrock_client) ->
     analysis_str = await _invoke_nova_for_analysis(bedrock_client, repo_name, tree, readme)
     
     # Save to db
+    from sqlalchemy.exc import IntegrityError
     new_analysis = models.RepoAnalysis(repo_name=repo_name, system_prompt_context=analysis_str)
-    db.add(new_analysis)
-    db.commit()
+    try:
+        db.add(new_analysis)
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        # Another request inserted it concurrently, which is fine
+        pass
     
     return analysis_str
 
 
-async def evaluate_local_commits(repo_name: str, issue_number: int) -> str:
-    """Checks the issue branch for commits, produces a diff, and attempts to run tests."""
-    repo_dir = os.path.join(WORKSPACES_DIR, repo_name.replace("/", "_"))
-    if not os.path.exists(repo_dir):
+async def evaluate_local_commits(repo_name: str, issue_number: int, user_email: str, db: Session) -> str:
+    """Checks the issue branch for commits on the user's fork, produces a diff, and attempts to run tests."""
+    repo_short_name = repo_name.split('/')[-1] if '/' in repo_name else repo_name
+    
+    # Securely retrieve PAT and GitHub Username
+    github_username = None
+    pat = None
+    try:
+        import requests as req
+        user_record = db.query(models.User).filter(models.User.email == user_email).first()
+        if user_record and user_record.github_pat:
+            pat = user_record.github_pat
+            res = req.get("https://api.github.com/user", headers={"Authorization": f"Bearer {pat}"})
+            if res.status_code == 200:
+                github_username = res.json().get("login")
+    except Exception as e:
+        print(f"Error fetching github username for evaluation route: {e}")
+        
+    if not github_username or not pat:
         return ""
         
+    repo_dir = os.path.join(WORKSPACES_DIR, f"{github_username}_{repo_short_name}")
+    
+    if not os.path.exists(repo_dir):
+        # User hasn't made a Vectr-synced clone of their fork yet, let's clone it now
+        if not os.path.exists(WORKSPACES_DIR):
+            os.makedirs(WORKSPACES_DIR)
+        clone_url = f"https://{pat}@github.com/{github_username}/{repo_short_name}.git"
+        code, out, err = await run_cmd_async(f"git clone {clone_url} {os.path.basename(repo_dir)}", cwd=WORKSPACES_DIR)
+        if code != 0:
+             return ""
+             
     branch_name = f"fix/issue-{issue_number}"
     
     # 1. Pull latest from remote
@@ -192,14 +273,22 @@ async def evaluate_local_commits(repo_name: str, issue_number: int) -> str:
          code, t_out, t_err = await run_cmd_async("pytest --maxfail=1", cwd=repo_dir)
          test_results = f"Pytest suite ran (exit code {code}):\nSTDOUT:\n{t_out[-1000:]}\nSTDERR:\n{t_err[-1000:]}"
          
+         
+    # Generate an AI summary of the diff so we don't spam the chat context with 3000 chars of pure code
+    try:
+        from app.routers.ask_nova import get_bedrock_client
+        client = get_bedrock_client()
+        diff_summary = await _invoke_nova_for_diff_summary(client, diff_str)
+    except Exception as e:
+        diff_summary = f"Summary failed: {e}. Raw diff truncated length: {len(diff_str)}"
 
     evaluation = (
         f"\n\n--- LOCAL COMMIT ANALYSIS ---\n"
         f"The user has created local commits on branch '{branch_name}'.\n"
-        f"Git Diff compared to default branch:\n```diff\n{diff_str}\n```\n\n"
+        f"AI Summary of Code Changes:\n{diff_summary}\n\n"
         f"Local Unit Test Results:\n{test_results}\n\n"
-        f"If the user asks 'Is my issue solved?', evaluate these code changes and test results strictly. "
-        f"If the diff looks complete and tests passed (if they exist), explicitly congratulate them and say the issue is solved. "
+        f"Whenever the user asks you to verify their local solution, strictly check the 'Local Unit Test Results' block. "
+        f"If the tests passed (if they exist) and the 'AI Summary of Code Changes' matches the proposed approach, explicitly congratulate them and say the issue is solved. "
         f"If there are errors, guide them on how to fix the code."
     )
     return evaluation

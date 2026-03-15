@@ -46,5 +46,7 @@ class ContributionProgress(Base):
     git_commands = Column(String)
     test_results = Column(String)
     chat_history = Column(String)
+    fork_status = Column(String, default="pending")  # pending | available
+    fork_vscode_url = Column(String, nullable=True)
 
 

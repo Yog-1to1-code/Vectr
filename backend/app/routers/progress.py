@@ -25,7 +25,9 @@ def get_progress(user_email: str, repo_name: str, issue_number: int, db: Session
             final_approach="",
             git_commands="",
             test_results="",
-            chat_history="[]"
+            chat_history="[]",
+            fork_status="pending",
+            fork_vscode_url=None
         )
     
     return schemas.ProgressResponse(
@@ -36,7 +38,9 @@ def get_progress(user_email: str, repo_name: str, issue_number: int, db: Session
         final_approach=progress.final_approach or "",
         git_commands=progress.git_commands or "",
         test_results=progress.test_results or "",
-        chat_history=progress.chat_history or "[]"
+        chat_history=progress.chat_history or "[]",
+        fork_status=progress.fork_status or "pending",
+        fork_vscode_url=progress.fork_vscode_url
     )
 
 @routes.post("/", response_model=schemas.ProgressResponse)
@@ -55,6 +59,10 @@ def save_progress(req: schemas.SaveProgressRequest, db: Session = Depends(get_db
         progress.git_commands = req.git_commands
         progress.test_results = req.test_results
         progress.chat_history = req.chat_history
+        if req.fork_status:
+            progress.fork_status = req.fork_status
+        if req.fork_vscode_url:
+            progress.fork_vscode_url = req.fork_vscode_url
     else:
         # Create a new Record
         progress = models.ContributionProgress(
@@ -65,7 +73,9 @@ def save_progress(req: schemas.SaveProgressRequest, db: Session = Depends(get_db
             final_approach=req.final_approach,
             git_commands=req.git_commands,
             test_results=req.test_results,
-            chat_history=req.chat_history
+            chat_history=req.chat_history,
+            fork_status=req.fork_status or "pending",
+            fork_vscode_url=req.fork_vscode_url
         )
         db.add(progress)
 
@@ -103,5 +113,7 @@ def save_progress(req: schemas.SaveProgressRequest, db: Session = Depends(get_db
         final_approach=progress.final_approach or "",
         git_commands=progress.git_commands or "",
         test_results=progress.test_results or "",
-        chat_history=progress.chat_history or "[]"
+        chat_history=progress.chat_history or "[]",
+        fork_status=progress.fork_status or "pending",
+        fork_vscode_url=progress.fork_vscode_url
     )

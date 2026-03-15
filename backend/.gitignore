@@ -47,4 +47,5 @@ ENV/
 # Test files
 test_*.py
 *integration_test*
-node_modules/
+node_modules/
+/workspaces

@@ -124,15 +124,18 @@ class CondensedIssue(BaseModel):
     title: str
     state: str
     labels: List[str]
+    issue_body: Optional[str] = None
 
 class AskNovaRequest(BaseModel):
     repo_name: str
     active_issue_number: Optional[int] = None
+    user_email: Optional[str] = None
     issues_context: List[CondensedIssue] # Provide the list of currently open issues here
     messages: List[ChatMessage] # Conversation history
 
 class AskNovaResponse(BaseModel):
     reply: str
+    updated_approach: Optional[str] = None
 
 class SummarizeIssueRequest(BaseModel):
     repo_name: str
@@ -140,6 +143,7 @@ class SummarizeIssueRequest(BaseModel):
     issue_title: str
     issue_body: str
     comments: List[str]
+    user_email: str
 
 class SummarizeIssueResponse(BaseModel):
     summary: str
@@ -149,9 +153,12 @@ class SummarizeIssueResponse(BaseModel):
 class FetchCommitsRequest(BaseModel):
     repo_name: str
     active_issue_number: int
+    user_email: str
 
 class FetchCommitsResponse(BaseModel):
     commits: List[str]
+    fork_detected: bool = False
+    fork_vscode_url: Optional[str] = None
 
 # Tier 6 - Contribution Progress Save State
 
@@ -166,6 +173,8 @@ class SaveProgressRequest(BaseModel):
     git_commands: Optional[str] = None
     test_results: Optional[str] = None
     chat_history: Optional[str] = None # Stringified JSON array
+    fork_status: Optional[str] = None  # pending | available
+    fork_vscode_url: Optional[str] = None
 
 class ProgressResponse(BaseModel):
     user_email: str
@@ -176,6 +185,8 @@ class ProgressResponse(BaseModel):
     git_commands: Optional[str] = None
     test_results: Optional[str] = None
     chat_history: Optional[str] = None # Stringified JSON array
+    fork_status: Optional[str] = None
+    fork_vscode_url: Optional[str] = None
 
 class SubmitPRRequest(BaseModel):
     user_email: str
