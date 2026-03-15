@@ -1,18 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-import models as models
-import app.schemas as schemas
-from database import get_db
-import requests as rq
-
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-import models as models
+import models
 import app.schemas as schemas
 from database import get_db
 import requests as rq
 from app.utils.encryption import decrypt_pat
 from datetime import datetime, timedelta
+import os
 
 routes = APIRouter(prefix="/user", tags=["Dashboard"])
 
@@ -22,12 +16,12 @@ def user_dashboard(email: str, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.email == email).first()
     if not user:
         raise HTTPException(status_code=404, detail="User Not Found")
-    if not user.github_pat:
-        raise HTTPException(status_code=400, detail="User's Github PAT is missing")
-        
-    # 2. Extract and Decrypt PAT
-    pat = decrypt_pat(user.github_pat)
-    exp_level = user.experience_lvl.capitalize()
+    # 2. Extract and Decrypt PAT (Fallback to environment variable if missing)
+    pat = decrypt_pat(user.github_pat) if user.github_pat else os.getenv("GITHUB_PAT")
+    if not pat:
+        raise HTTPException(status_code=400, detail="User's Github PAT is missing (not found in profile or .env)")
+    
+    exp_level = user.experience_lvl.capitalize() if user.experience_lvl else "Intermediate"
     
     headers = {
         "Authorization": f"token {pat}",
@@ -148,3 +142,83 @@ def user_dashboard(email: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=e.response.status_code, detail="Failed to fetch data from GitHub.")
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Dashboard error: {str(e)}")
+
+@routes.get("/commit-map", response_model=list[schemas.CommitMapData])
+def user_commit_map(email: str, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User Not Found")
+        
+    pat = decrypt_pat(user.github_pat) if user.github_pat else os.getenv("GITHUB_PAT")
+    if not pat:
+        raise HTTPException(status_code=400, detail="User's Github PAT is missing")
+        
+    headers = {
+        "Authorization": f"token {pat}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    
+    try:
+        profile_res = rq.get("https://api.github.com/user", headers=headers)
+        profile_res.raise_for_status()
+        github_username = profile_res.json().get("login", "Unknown")
+        
+        graphql_url = "https://api.github.com/graphql"
+        query = """
+        query($login: String!) {
+          user(login: $login) {
+            contributionsCollection {
+              contributionCalendar {
+                weeks {
+                  contributionDays {
+                    contributionCount
+                    date
+                  }
+                }
+              }
+            }
+          }
+        }
+        """
+        graphql_res = rq.post(
+            graphql_url,
+            json={"query": query, "variables": {"login": github_username}},
+            headers=headers
+        )
+        
+        commit_map = []
+        if graphql_res.status_code == 200:
+            data = graphql_res.json()
+            try:
+                weeks = data["data"]["user"]["contributionsCollection"]["contributionCalendar"]["weeks"]
+                days = [day for week in weeks for day in week["contributionDays"]]
+                for day in days:
+                    commit_map.append(
+                        schemas.CommitMapData(
+                            date=day["date"],
+                            count=day["contributionCount"]
+                        )
+                    )
+            except KeyError:
+                pass
+                
+        if not commit_map:
+            today = datetime.now()
+            for i in range(364):
+                day = today - timedelta(days=363-i)
+                commit_map.append(
+                    schemas.CommitMapData(
+                        date=day.strftime("%Y-%m-%d"),
+                        count=0
+                    )
+                )
+                
+        return commit_map
+        
+    except rq.exceptions.HTTPError as e:
+        if e.response.status_code == 401:
+            raise HTTPException(status_code=401, detail="Invalid GitHub PAT token.")
+        raise HTTPException(status_code=e.response.status_code, detail="Failed to fetch data from GitHub.")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Commit map error: {str(e)}")
+

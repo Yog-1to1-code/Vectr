@@ -55,7 +55,8 @@ async def ask_nova(request: schemas.AskNovaRequest, db: Session = Depends(get_db
     # Format the issues for the system prompt
     issues_text = ""
     for issue in request.issues_context:
-        issues_text += f"- Issue #{issue.number}: {issue.title} (Labels: {', '.join(issue.labels)})\n"
+        labels_str = ', '.join(issue.labels) if issue.labels else "none"
+        issues_text += f"- Issue #{issue.number}: {issue.title} (Labels: {labels_str})\n"
         
     if not issues_text:
         issues_text = "No open issues currently available."
@@ -71,19 +72,41 @@ async def ask_nova(request: schemas.AskNovaRequest, db: Session = Depends(get_db
     if request.active_issue_number:
         local_evaluation = await evaluate_local_commits(request.repo_name, request.active_issue_number)
         
-    # Construct System Prompt with Context
-    system_prompt = (
-        f"You are Vectr Nova, an expert open source contribution assistant.\n"
-        f"The user is currently browsing the repository '{request.repo_name}'.\n\n"
-        f"Here is the list of currently open issues in this repository:\n"
-        f"{issues_text}\n"
-        f"{repo_analysis}"
-        f"{local_evaluation}"
-        f"Your goals:\n"
-        f"1. Help the user select the best issue for their skill level. If they ask for something easy, look for 'good first issue' or 'beginner' labels.\n"
-        f"2. Once an issue is selected, briefly explain what it entails and suggest the first files they should check to get started.\n"
-        f"3. Be concise, friendly, and highly technical in your answers. Do not explain git commands unless asked; focus on the code and logic."
-    )
+    # Construct System Prompt with Context depending on whether an issue is selected
+    if request.active_issue_number:
+        active_issue = next((iss for iss in request.issues_context if iss.number == request.active_issue_number), None)
+        if active_issue:
+            labels_str = ', '.join(active_issue.labels) if active_issue.labels else "none"
+            issue_details = f"Issue #{active_issue.number}: {active_issue.title} (Labels: {labels_str})\n"
+            if getattr(active_issue, 'body', None):
+                issue_details += f"Description: {active_issue.body}\n"
+        else:
+            issue_details = f"Issue #{request.active_issue_number}\n"
+
+        system_prompt = (
+            f"You are Vectr Nova, an expert open source contribution assistant.\n"
+            f"The user is currently browsing the repository '{request.repo_name}' and is working on fixing the following issue:\n\n"
+            f"{issue_details}\n"
+            f"{repo_analysis}"
+            f"{local_evaluation}"
+            f"Your goals:\n"
+            f"1. Help the user fix this exact issue. Provide relevant code snippets, explain logic, and guide them if they encounter errors.\n"
+            f"2. Use the provided REPOSITORY CONTEXT to suggest file paths and understand the project's architecture.\n"
+            f"3. If LOCAL COMMIT ANALYSIS is present, evaluate their code changes and test results strictly. Congratulate them if the tests pass and the issue is resolved.\n"
+            f"4. Be concise, friendly, and highly technical. Do not explain basic git commands unless asked; focus on the code implementation."
+        )
+    else:
+        system_prompt = (
+            f"You are Vectr Nova, an expert open source contribution assistant.\n"
+            f"The user is currently browsing the repository '{request.repo_name}'.\n\n"
+            f"Here is the list of currently open issues in this repository:\n"
+            f"{issues_text}\n"
+            f"{repo_analysis}"
+            f"Your goals:\n"
+            f"1. Help the user select the best issue for their skill level. If they ask for something easy, look for 'good first issue' or 'beginner' labels.\n"
+            f"2. Once an issue is selected, briefly explain what it entails and suggest the first files they should check to get started.\n"
+            f"3. Be concise, friendly, and highly technical in your answers. Do not explain git commands unless asked; focus on the code and logic."
+        )
     
     # Format messages for Amazon Nova models
     formatted_messages = []
@@ -129,11 +152,9 @@ async def ask_nova(request: schemas.AskNovaRequest, db: Session = Depends(get_db
             return schemas.AskNovaResponse(reply=reply_text)
             
         else:
-            body = {
-                "system": [{"text": system_prompt}],
-                "messages": formatted_messages,
-                "inferenceConfig": {"maxTokens": 1000, "temperature": 0.5, "topP": 0.9}
-            }
+            # Re-fetch client or use the one initialized at the start of the function
+            if not client:
+                 client = get_bedrock_client()
             response = client.invoke_model(
                 modelId=os.getenv("NOVA_MODEL_ID", "amazon.nova-lite-v1:0"),
                 body=json.dumps(body),
@@ -141,7 +162,10 @@ async def ask_nova(request: schemas.AskNovaRequest, db: Session = Depends(get_db
                 contentType="application/json"
             )
             response_body = json.loads(response.get('body').read())
-            reply_text = response_body.get('output', {}).get('message', {}).get('content', [{}])[0].get('text', "")
+            # Ensure we don't crash if content is None or empty
+            output_msg = response_body.get('output', {}).get('message', {})
+            content_list = output_msg.get('content') or []
+            reply_text = content_list[0].get('text', "") if content_list else ""
             return schemas.AskNovaResponse(reply=reply_text)
             
     except Exception as e:
@@ -185,7 +209,7 @@ async def summarize_issue(request: schemas.SummarizeIssueRequest, background_tas
         print(f"Failed to analyze repo in summarize step: {str(e)}")
 
     # 1. Combine all the GitHub comments into a single block of text
-    discussion = "\n".join(request.comments)
+    discussion = "\n".join(request.comments or [])
     if not discussion:
         discussion = "No comments on this issue yet."
 
@@ -245,7 +269,10 @@ async def summarize_issue(request: schemas.SummarizeIssueRequest, background_tas
                 contentType="application/json"
             )
             response_body = json.loads(response.get('body').read())
-            reply_text = response_body.get('output', {}).get('message', {}).get('content', [{}])[0].get('text', "")
+            # Ensure we don't crash if content is None or empty
+            output_msg = response_body.get('output', {}).get('message', {})
+            content_list = output_msg.get('content') or []
+            reply_text = content_list[0].get('text', "") if content_list else ""
 
         # 4. Clean and Parse the JSON from AI's text response
         reply_text = reply_text.strip()
@@ -272,45 +299,37 @@ async def summarize_issue(request: schemas.SummarizeIssueRequest, background_tas
 @routes.post("/commits", response_model=schemas.FetchCommitsResponse)
 async def fetch_commits(request: schemas.FetchCommitsRequest):
     """
-    Checks the local workspace for the issue branch and returns the commit log messages.
+    Tracks the code changes by pulling the commits from GitHub for the selected repo.
     """
-    from app.utils.repo_analyzer import WORKSPACES_DIR, run_cmd_async
+    import requests as rq
+    import os
     
-    repo_dir = os.path.join(WORKSPACES_DIR, request.repo_name.replace("/", "_"))
-    if not os.path.exists(repo_dir):
-        return schemas.FetchCommitsResponse(commits=[])
+    pat = os.getenv("GITHUB_PAT")
+    headers = {"Accept": "application/vnd.github.v3+json"}
+    if pat:
+        headers["Authorization"] = f"token {pat}"
         
-    branch_name = f"fix/issue-{request.active_issue_number}"
-    
-    # 1. Pull latest from remote
-    await run_cmd_async(f"git fetch origin", cwd=repo_dir)
-    
-    # Check if branch exists locally
-    code, out, err = await run_cmd_async(f"git branch --list {branch_name}", cwd=repo_dir)
-    if not out.strip():
-        # Try to checkout the remote branch if it exists, otherwise it might not exist at all yet
-        chk_code, chk_out, chk_err = await run_cmd_async(f"git checkout -b {branch_name} origin/{branch_name}", cwd=repo_dir)
-        if chk_code != 0:
-             # Branch doesn't exist on remote either
-             return schemas.FetchCommitsResponse(commits=[])
-    else:
-        # Branch exists locally, pull latest
-        await run_cmd_async(f"git checkout {branch_name}", cwd=repo_dir)
-        await run_cmd_async(f"git pull origin {branch_name}", cwd=repo_dir)
-         
-    # 2. Find default branch
-    code, def_branch_out, err = await run_cmd_async("git symbolic-ref refs/remotes/origin/HEAD", cwd=repo_dir)
-    if code != 0:
-         default_branch = "main" # Fallback
-    else:
-         default_branch = def_branch_out.strip().split('/')[-1]
-
-    # 3. Get commit messages between default branch and issue branch
-    code, log_out, err = await run_cmd_async(f"git log {default_branch}..{branch_name} --oneline", cwd=repo_dir)
-    
     commits = []
-    if log_out.strip():
-        # git log returns newest first, split by newline
-        commits = [line.strip() for line in log_out.strip().split('\n') if line.strip()]
+    try:
+        # First try to see if the issue branch exists remotely and fetch its commits
+        branch_name = f"fix/issue-{request.active_issue_number}"
+        url = f"https://api.github.com/repos/{request.repo_name}/commits"
+        
+        # Try fetching branch-specific commits
+        res = rq.get(url, headers=headers, params={"sha": branch_name, "per_page": 10})
+        
+        # If branch doesn't exist remotely (404), fallback to getting the repo's latest default branch commits
+        if res.status_code == 404:
+            res = rq.get(url, headers=headers, params={"per_page": 10})
+            
+        if res.status_code == 200:
+            commits_data = res.json()
+            for c in commits_data:
+                short_sha = c.get('sha', '')[:7]
+                message = c.get('commit', {}).get('message', '').split('\n')[0]
+                commits.append(f"{short_sha} {message}")
+                
+    except Exception as e:
+        print(f"Error fetching commits from GitHub API: {e}")
         
     return schemas.FetchCommitsResponse(commits=commits)

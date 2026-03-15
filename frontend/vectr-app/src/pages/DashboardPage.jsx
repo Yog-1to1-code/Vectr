@@ -37,31 +37,31 @@ export default function DashboardPage() {
 
     const handleIssueClick = async (repoName, issueNum, blockType) => {
         if (!issueNum) return;
-        
+
         const navId = `${blockType}-${repoName}#${issueNum}`;
         setNavigatingTo(navId);
 
         try {
             const org = repoName.split('/')[0];
             const repo = repoName.split('/')[1] || '';
-            
+
             // We need to fetch the issue details before navigating because IssueDashboardPage expects it in state
             const data = await repoAPI.getRepoIssues(org, repo, user.email);
             const targetIssue = data.issues?.find(i => i.number.toString() === issueNum.toString());
-            
-            navigate(buildIssuePath(org, repo, issueNum), { 
-                state: { 
-                    issue: targetIssue || { title: `Issue #${issueNum}` }, 
-                    repoName, 
-                    issues: data.issues || [] 
-                } 
+
+            navigate(buildIssuePath(org, repo, issueNum), {
+                state: {
+                    issue: targetIssue || { title: `Issue #${issueNum}` },
+                    repoName,
+                    issues: data.issues || []
+                }
             });
         } catch (err) {
             console.error("Failed to fetch issue details for navigation:", err);
             // Fallback navigate
             const org = repoName.split('/')[0];
             const repo = repoName.split('/')[1] || '';
-            navigate(buildIssuePath(org, repo, issueNum), { state: { repoName }});
+            navigate(buildIssuePath(org, repo, issueNum), { state: { repoName } });
         } finally {
             setNavigatingTo(null);
         }
@@ -134,8 +134,8 @@ export default function DashboardPage() {
                                         const issueNum = match ? match[1] : '';
 
                                         return (
-                                            <div 
-                                                key={i} 
+                                            <div
+                                                key={i}
                                                 onClick={() => handleIssueClick(c.repo_name, issueNum, 'contributions')}
                                                 className={`p-4 rounded-lg border border-border-default/50 transition-all group relative overflow-hidden ${issueNum ? 'cursor-pointer hover:border-accent-cyan/30 hover:bg-white/5 active:scale-[0.98]' : ''}`}
                                                 style={{ background: 'rgba(19,29,47,0.5)' }}
@@ -176,12 +176,12 @@ export default function DashboardPage() {
                                         // Extract issue number safely from title (e.g. "Issue #123: ...")
                                         const match = w.issue_title.match(/#(\d+)/);
                                         const issueNum = match ? match[1] : '';
-                                        
+
                                         return (
-                                            <div 
-                                                key={i} 
+                                            <div
+                                                key={i}
                                                 onClick={() => handleIssueClick(w.repo_name, issueNum, 'working')}
-                                                className={`p-3 rounded-lg border border-border-default/30 relative overflow-hidden transition-all ${issueNum ? 'cursor-pointer hover:border-accent-cyan/50 hover:bg-white/5 active:scale-[0.98]' : ''}`} 
+                                                className={`p-3 rounded-lg border border-border-default/30 relative overflow-hidden transition-all ${issueNum ? 'cursor-pointer hover:border-accent-cyan/50 hover:bg-white/5 active:scale-[0.98]' : ''}`}
                                                 style={{ background: 'rgba(19,29,47,0.5)' }}
                                             >
                                                 {navigatingTo === `working-${w.repo_name}#${issueNum}` && (
@@ -207,7 +207,20 @@ export default function DashboardPage() {
 
                     {/* Commit Map */}
                     <div className="glass-card p-4">
-                        <h2 className="text-lg font-semibold text-text-primary mb-4">Commit Map</h2>
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-lg font-semibold text-text-primary">Commit Map</h2>
+                            <button
+                                onClick={handleRefreshCommitMap}
+                                disabled={refreshingCommitMap}
+                                className="text-text-muted hover:text-text-primary transition-colors disabled:opacity-50"
+                                aria-label="Refresh Commit Map"
+                                title="Refresh Commit Map"
+                            >
+                                <svg className={`w-5 h-5 ${refreshingCommitMap ? 'animate-spin' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                            </button>
+                        </div>
                         <CommitMap data={commitData} />
                     </div>
 
@@ -225,12 +238,12 @@ export default function DashboardPage() {
                                     pullRequests.map((pr, i) => {
                                         const match = pr.issue_title.match(/#(\d+)/);
                                         const issueNum = match ? match[1] : '';
-                                        
+
                                         return (
-                                            <div 
-                                                key={i} 
+                                            <div
+                                                key={i}
                                                 onClick={() => handleIssueClick(pr.repo_name, issueNum, 'pr')}
-                                                className={`p-3 rounded-lg border border-border-default/30 flex items-center justify-between relative overflow-hidden transition-all ${issueNum ? 'cursor-pointer hover:border-accent-cyan/50 hover:bg-white/5 active:scale-[0.98]' : ''}`} 
+                                                className={`p-3 rounded-lg border border-border-default/30 flex items-center justify-between relative overflow-hidden transition-all ${issueNum ? 'cursor-pointer hover:border-accent-cyan/50 hover:bg-white/5 active:scale-[0.98]' : ''}`}
                                                 style={{ background: 'rgba(19,29,47,0.5)' }}
                                             >
                                                 {navigatingTo === `pr-${pr.repo_name}#${issueNum}` && (

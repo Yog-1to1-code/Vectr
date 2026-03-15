@@ -89,6 +89,8 @@ export const patAPI = {
 export const dashboardAPI = {
     get: (email) =>
         api.get(`/user/dashboard?email=${encodeURIComponent(email)}`).then(r => r.data),
+    getCommitMap: (email) =>
+        api.get(`/user/commit-map?email=${encodeURIComponent(email)}`).then(r => r.data),
 };
 
 // ═══════════════════════════════════════════════════════════════════

@@ -123,6 +123,7 @@ class CondensedIssue(BaseModel):
     number: int
     title: str
     state: str
+    body: Optional[str] = None
     labels: List[str]
 
 class AskNovaRequest(BaseModel):

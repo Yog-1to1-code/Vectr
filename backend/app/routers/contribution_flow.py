@@ -6,6 +6,7 @@ from database import get_db
 import requests as rq
 from app.utils.encryption import decrypt_pat
 from typing import Optional
+import os
 
 routes = APIRouter(prefix="/contribution", tags=["Contribution Flow"])
 
@@ -36,10 +37,9 @@ def start_contribution(
         )
         
     # INTERMEDIATE / EXPERT / BEGINNER (WITH LANGUAGE): Proceed to Org Selection
-    if not user.github_pat:
+    pat = decrypt_pat(user.github_pat) if user.github_pat else os.getenv("GITHUB_PAT")
+    if not pat:
         raise HTTPException(status_code=400, detail="User's Github PAT is missing")
-        
-    pat = decrypt_pat(user.github_pat)
     headers = {
         "Authorization": f"token {pat}",
         "Accept": "application/vnd.github.v3+json"

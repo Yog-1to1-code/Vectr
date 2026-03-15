@@ -6,14 +6,15 @@ from database import get_db
 import requests as rq
 from app.utils.encryption import decrypt_pat
 from typing import Optional
+import os
 
 routes = APIRouter(prefix="/repos", tags=["Repository & Issues"])
 
 def get_github_headers(email: str, db: Session):
     user = db.query(models.User).filter(models.User.email == email).first()
-    if not user or not user.github_pat:
+    pat = decrypt_pat(user.github_pat) if (user and user.github_pat) else os.getenv("GITHUB_PAT")
+    if not pat:
         raise HTTPException(status_code=400, detail="User's Github PAT is missing")
-    pat = decrypt_pat(user.github_pat)
     return {
         "Authorization": f"token {pat}",
         "Accept": "application/vnd.github.v3+json"
@@ -99,7 +100,8 @@ def get_repo_issues(
             if "pull_request" in issue:
                 continue
                 
-            labels = [label["name"] for label in issue.get("labels", [])]
+            labels_raw = issue.get("labels")
+            labels = [label["name"] for label in labels_raw] if labels_raw else []
                 
             issues.append(
                 schemas.IssueItem(

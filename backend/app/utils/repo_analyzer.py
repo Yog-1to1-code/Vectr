@@ -100,7 +100,10 @@ async def _invoke_nova_for_analysis(client, repo_name: str, tree: str, readme: s
                 contentType="application/json"
             )
             response_body = json.loads(response.get('body').read())
-            return response_body.get('output', {}).get('message', {}).get('content', [{}])[0].get('text', "")
+            
+            output_msg = response_body.get('output', {}).get('message', {})
+            content_list = output_msg.get('content') or []
+            return content_list[0].get('text', "") if content_list else ""
             
     except Exception as e:
         print(f"Error invoking Nova for static analysis: {e}")
