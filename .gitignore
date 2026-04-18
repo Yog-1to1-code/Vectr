@@ -1,8 +1,7 @@
 # Secrets
 .env
 .env.*
-backend/.env
-frontend/.env
+!.env.example
 
 # Python
 __pycache__/
@@ -15,11 +14,6 @@ ENV/
 build/
 dist/
 *.egg-info/
-*.json
-!package.json
-!composer.json
-!tsconfig.json
-!jsconfig.json
 
 # Node
 node_modules/
@@ -29,8 +23,6 @@ dist-ssr
 
 # Logs
 *.log
-out.txt
-x.txt
 
 # IDEs
 .vscode/
@@ -38,8 +30,11 @@ x.txt
 *.swp
 *.swo
 
-# Project specific caches
-issues.json
-PRs.json
-test_pat_auth_script
+# OS
 .DS_Store
+Thumbs.db
+
+# Project caches
+*.json
+!package.json
+!package-lock.json
