@@ -1,7 +1,7 @@
-import React, { useEffect, useRef } from "react";
+import React from "react";
 import { cn } from "../lib/utils";
-import createGlobe from "cobe";
 import { motion } from "motion/react";
+import WorldMap from "./ui/world-map";
 
 /**
  * Features section adapted from Aceternity UI, customized for Vectr.
@@ -222,58 +222,40 @@ const SkeletonThree = () => {
     );
 };
 
-/* ─── Skeleton Four: Globe ────────────────────────────────────────── */
+/* ─── Skeleton Four: World Map ────────────────────────────────────── */
 const SkeletonFour = () => {
     return (
         <div className="skeleton-four">
-            <Globe className="skeleton-globe" />
+            <WorldMap
+                lineColor="#4ade80"
+                dots={[
+                    {
+                        start: { lat: 64.2008, lng: -149.4937 }, // Alaska (Fairbanks)
+                        end: { lat: 34.0522, lng: -118.2437 },   // Los Angeles
+                    },
+                    {
+                        start: { lat: 64.2008, lng: -149.4937 }, // Alaska (Fairbanks)
+                        end: { lat: -15.7975, lng: -47.8919 },   // Brazil (Brasília)
+                    },
+                    {
+                        start: { lat: -15.7975, lng: -47.8919 }, // Brazil (Brasília)
+                        end: { lat: 38.7223, lng: -9.1393 },     // Lisbon
+                    },
+                    {
+                        start: { lat: 51.5074, lng: -0.1278 },   // London
+                        end: { lat: 28.6139, lng: 77.209 },      // New Delhi
+                    },
+                    {
+                        start: { lat: 28.6139, lng: 77.209 },    // New Delhi
+                        end: { lat: 43.1332, lng: 131.9113 },    // Vladivostok
+                    },
+                    {
+                        start: { lat: 28.6139, lng: 77.209 },    // New Delhi
+                        end: { lat: -1.2921, lng: 36.8219 },     // Nairobi
+                    },
+                ]}
+            />
         </div>
     );
 };
 
-const Globe = ({ className }) => {
-    const canvasRef = useRef(null);
-
-    useEffect(() => {
-        let phi = 0;
-        if (!canvasRef.current) return;
-
-        const globe = createGlobe(canvasRef.current, {
-            devicePixelRatio: 2,
-            width: 600 * 2,
-            height: 600 * 2,
-            phi: 0,
-            theta: 0,
-            dark: 1,
-            diffuse: 1.2,
-            mapSamples: 4000,
-            mapBrightness: 6,
-            baseColor: [0.3, 0.3, 0.3],
-            markerColor: [0.1, 0.8, 1],
-            glowColor: [0.15, 0.15, 0.15],
-            markers: [
-                { location: [37.7595, -122.4367], size: 0.03 },
-                { location: [40.7128, -74.006], size: 0.1 },
-                { location: [51.5074, -0.1278], size: 0.06 },
-                { location: [28.6139, 77.209], size: 0.08 },
-                { location: [35.6762, 139.6503], size: 0.05 },
-            ],
-            onRender: (state) => {
-                state.phi = phi;
-                phi += 0.01;
-            },
-        });
-
-        return () => {
-            globe.destroy();
-        };
-    }, []);
-
-    return (
-        <canvas
-            ref={canvasRef}
-            style={{ width: 600, height: 600, maxWidth: "100%", aspectRatio: 1 }}
-            className={className}
-        />
-    );
-};

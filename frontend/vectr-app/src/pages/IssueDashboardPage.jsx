@@ -6,7 +6,6 @@ import { useAuth } from '../context/AuthContext';
 import { novaAPI, progressAPI } from '../services/api';
 import { buildDraftPRPath, ROUTES } from '../constants';
 import { useToast } from '../components/Toast';
-import VectrLogo from '../components/VectrLogo';
 import NovaChat from '../components/NovaChat';
 
 export default function IssueDashboardPage() {

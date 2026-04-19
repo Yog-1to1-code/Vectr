@@ -4,9 +4,9 @@ import { useAuth } from '../context/AuthContext';
 import { contributionAPI, repoAPI } from '../services/api';
 import { ROUTES, FLOW_STEPS, SUPPORTED_LANGUAGES, buildIssuePath } from '../constants';
 import { useToast } from '../components/Toast';
-import VectrLogo from '../components/VectrLogo';
 import NovaChat from '../components/NovaChat';
 import { ListSkeleton } from '../components/Skeleton';
+import { Button as StatefulButton } from '../components/ui/stateful-button';
 
 export default function ContributePage() {
     const { user } = useAuth();
@@ -270,17 +270,17 @@ export default function ContributePage() {
 
             {/* ── Language Selection Modal ── */}
             {showLangModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => { }}>
-                    <div className="glass-card-accent w-full max-w-2xl p-6 m-4 slide-up flex flex-col max-h-[80vh]" role="dialog" aria-label="Select Language">
-                        <h3 className="text-lg font-semibold text-text-primary mb-2">Select Language</h3>
-                        <p className="text-text-muted text-sm mb-6">Choose a language to filter relevant organizations and repositories</p>
-                        <div className="mb-4">
+                <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }} onClick={() => { }}>
+                    <div className="glass-card-accent w-full max-w-2xl p-8 m-4 slide-up flex flex-col max-h-[80vh]" role="dialog" aria-label="Select Language">
+                        <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#f0f0f0', marginBottom: '6px' }}>Select Language</h3>
+                        <p style={{ fontSize: '0.82rem', color: '#666', marginBottom: '24px' }}>Choose a language to filter relevant organizations and repositories</p>
+                        <div style={{ marginBottom: '16px' }}>
                             <input 
                                 type="text"
                                 placeholder="Search languages..."
                                 value={langSearch}
                                 onChange={(e) => setLangSearch(e.target.value)}
-                                className="w-full bg-bg-panel border border-border-default/50 rounded-lg px-4 py-2 text-text-primary focus:outline-none focus:border-accent-cyan"
+                                className="modal-search-input"
                             />
                         </div>
                         <div className="flex flex-wrap gap-2 mb-6 overflow-y-auto">
@@ -288,22 +288,18 @@ export default function ContributePage() {
                                 .filter(lang => lang.toLowerCase().includes(langSearch.toLowerCase()))
                                 .map((lang, i) => (
                                 <button key={i} onClick={() => setSelectedLang(lang)}
-                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${selectedLang === lang
-                                            ? 'bg-accent-cyan/20 text-accent-cyan border border-accent-cyan'
-                                            : 'bg-bg-panel text-text-secondary border border-border-default/50 hover:border-text-muted'
-                                        }`}>{lang}</button>
+                                    className={`modal-pill-btn ${selectedLang === lang ? 'modal-pill-selected' : ''}`}
+                                >{lang}</button>
                             ))}
                             <button onClick={() => setSelectedLang('All')}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all cursor-pointer ${selectedLang === 'All'
-                                        ? 'bg-accent-cyan/20 text-accent-cyan border border-accent-cyan'
-                                        : 'bg-bg-panel text-text-secondary border border-border-default/50 hover:border-text-muted'
-                                    }`}>All Languages</button>
+                                className={`modal-pill-btn ${selectedLang === 'All' ? 'modal-pill-selected' : ''}`}
+                            >All Languages</button>
                         </div>
                         <div className="flex justify-between">
-                            <button onClick={() => { setShowLangModal(false); navigate(ROUTES.DASHBOARD); }} className="btn-secondary text-sm">Cancel</button>
-                            <button onClick={() => selectedLang && handleLangSelect(selectedLang)} className="btn-primary text-sm" disabled={!selectedLang}>
+                            <button onClick={() => { setShowLangModal(false); navigate(ROUTES.DASHBOARD); }} className="modal-btn-cancel">Cancel</button>
+                            <StatefulButton onClick={() => selectedLang && handleLangSelect(selectedLang)} disabled={!selectedLang}>
                                 Next
-                            </button>
+                            </StatefulButton>
                         </div>
                     </div>
                 </div>
@@ -311,22 +307,22 @@ export default function ContributePage() {
 
             {/* ── Org Selection Modal ── */}
             {showOrgModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-                    <div className="glass-card-accent w-full max-w-2xl p-6 m-4 slide-up max-h-[80vh] flex flex-col" role="dialog" aria-label="Select Organization">
+                <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(8px)' }}>
+                    <div className="glass-card-accent w-full max-w-2xl p-8 m-4 slide-up max-h-[80vh] flex flex-col" role="dialog" aria-label="Select Organization">
                         <div className="flex items-center gap-3 mb-2">
-                            <button onClick={() => { setShowOrgModal(false); setShowLangModal(true); }} className="text-text-secondary hover:text-text-primary" aria-label="Back">
+                            <button onClick={() => { setShowOrgModal(false); setShowLangModal(true); }} style={{ color: '#666', background: 'none', border: 'none', cursor: 'pointer', padding: '4px' }} aria-label="Back">
                                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
                             </button>
-                            <h3 className="text-lg font-semibold text-text-primary">Select Organisation</h3>
+                            <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#f0f0f0' }}>Select Organisation</h3>
                         </div>
-                        <p className="text-text-muted text-sm mb-6">Choose an organization to explore its repositories</p>
-                        <div className="mb-4">
+                        <p style={{ fontSize: '0.82rem', color: '#666', marginBottom: '24px' }}>Choose an organization to explore its repositories</p>
+                        <div style={{ marginBottom: '16px' }}>
                             <input 
                                 type="text"
                                 placeholder="Search organizations..."
                                 value={orgSearch}
                                 onChange={(e) => setOrgSearch(e.target.value)}
-                                className="w-full bg-bg-panel border border-border-default/50 rounded-lg px-4 py-2 text-text-primary focus:outline-none focus:border-accent-cyan"
+                                className="modal-search-input"
                             />
                         </div>
                         <div className="flex-1 overflow-y-auto space-y-2 mb-6">
@@ -336,10 +332,10 @@ export default function ContributePage() {
                                     if (orgSearch.trim() !== '') {
                                         return (
                                             <div className="text-center py-8">
-                                                <p className="text-text-muted mb-4">Organization '{orgSearch}' not found in the list.</p>
+                                                <p style={{ color: '#666', marginBottom: '16px', fontSize: '0.85rem' }}>Organization '{orgSearch}' not found in the list.</p>
                                                 <button 
                                                     onClick={() => handleFallbackOrgSearch(orgSearch)}
-                                                    className="btn-primary text-sm"
+                                                    className="modal-btn-next"
                                                     disabled={loading}
                                                 >
                                                     {loading ? 'Fetching...' : `Fetch '${orgSearch}' from GitHub`}
@@ -347,26 +343,24 @@ export default function ContributePage() {
                                             </div>
                                         );
                                     }
-                                    return <p className="text-text-muted text-center py-8">No organizations found for the selected criteria</p>;
+                                    return <p style={{ color: '#555', textAlign: 'center', padding: '32px 0', fontSize: '0.85rem' }}>No organizations found for the selected criteria</p>;
                                 }
                                 return filteredOrgs.map((org, i) => (
                                     <button key={i} onClick={() => setSelectedOrg(org)}
-                                        className={`w-full flex items-center justify-between p-4 rounded-lg border transition-all cursor-pointer ${selectedOrg?.name === org.name ? 'border-accent-cyan/50 bg-bg-panel' : 'border-border-default/30 hover:border-border-default'
-                                            }`}
-                                        style={{ background: selectedOrg?.name === org.name ? 'rgba(26,39,68,0.8)' : 'rgba(15,23,41,0.5)' }}>
+                                        className={`modal-org-card ${selectedOrg?.name === org.name ? 'modal-org-selected' : ''}`}>
                                         <div className="flex items-center gap-3">
                                             {org.avatar_url && <img src={org.avatar_url} alt={org.name} className="w-8 h-8 rounded-full" loading="lazy" />}
-                                            <span className="text-text-primary font-medium">{org.name}</span>
+                                            <span style={{ color: '#e0e0e0', fontWeight: 500 }}>{org.name}</span>
                                         </div>
-                                        <span className="text-text-muted text-sm truncate max-w-48">{org.description?.slice(0, 50) || ''}</span>
+                                        <span style={{ color: '#555', fontSize: '0.82rem' }} className="truncate max-w-48">{org.description?.slice(0, 50) || ''}</span>
                                     </button>
                                 ));
                             })()}
                         </div>
                         <div className="flex justify-end">
-                            <button onClick={() => selectedOrg && handleOrgSelect(selectedOrg)} className="btn-primary text-sm" disabled={!selectedOrg}>
+                            <StatefulButton onClick={() => selectedOrg && handleOrgSelect(selectedOrg)} disabled={!selectedOrg}>
                                 Select Organization
-                            </button>
+                            </StatefulButton>
                         </div>
                     </div>
                 </div>

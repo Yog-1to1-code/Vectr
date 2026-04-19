@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Sidebar from './Sidebar';
 
@@ -6,10 +7,12 @@ import Sidebar from './Sidebar';
  * Pages like Login and PAT use their own full-screen layout.
  */
 export default function AppLayout() {
+    const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
     return (
-        <div className="min-h-screen bg-bg-primary">
-            <Sidebar />
-            <main className="ml-14 md:ml-14 lg:ml-14 min-h-screen transition-all duration-300">
+        <div className="app-layout">
+            <Sidebar collapsed={sidebarCollapsed} setCollapsed={setSidebarCollapsed} />
+            <main className="app-main" style={{ marginLeft: sidebarCollapsed ? 64 : 260 }}>
                 <Outlet />
             </main>
         </div>

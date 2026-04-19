@@ -5,7 +5,6 @@ import { useParams, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { ROUTES } from '../constants';
 import { useToast } from '../components/Toast';
-import VectrLogo from '../components/VectrLogo';
 import NovaChat from '../components/NovaChat';
 import { contributionAPI, novaAPI, progressAPI } from '../services/api';
 
